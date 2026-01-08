@@ -245,10 +245,31 @@ export async function handleWebhook(payload) {
     timestamp: new Date().toISOString()
   };
 
-  // Check topic
-  if (topic !== 'conversation.admin.assigned') {
+  // Check topic - handle both admin and team assignment webhooks
+  if (topic !== 'conversation.admin.assigned' && topic !== 'conversation.team.assigned') {
     console.log(JSON.stringify({ ...logEntry, decision: 'ignored', reason: 'wrong_topic' }));
     return;
+  }
+
+  // Handle team-only assignments: skip them (we only care about agent assignments)
+  if (topic === 'conversation.team.assigned') {
+    // Extract to check if there's also an agent assigned
+    const item = payload.data?.item || payload.item || payload.data;
+    const hasAgent = item?.admin_assignee_id || item?.admin_assignee?.id;
+    
+    if (!hasAgent) {
+      // Team-only assignment - skip it
+      console.log(JSON.stringify({ 
+        ...logEntry, 
+        decision: 'ignored', 
+        reason: 'team_only_assignment',
+        teamAssigneeId: item?.team_assignee_id || item?.team?.id || null,
+        note: 'Only team assigned, no agent - skipping'
+      }));
+      return;
+    }
+    // If there's also an agent, fall through to process it
+    // (This handles cases where team assignment webhook includes agent info)
   }
 
   // Check webhook deduplication
