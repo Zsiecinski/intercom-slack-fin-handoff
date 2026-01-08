@@ -303,6 +303,7 @@ export async function handleWebhook(payload) {
 
   logEntry.conversationId = conversationId;
   logEntry.assigneeId = assigneeId;
+  logEntry.teamAssigneeId = teamAssigneeId || null;
 
   // Noise control: Skip team-only assignments (no agent) unless FALLBACK_CHANNEL is set
   // If both team and agent are assigned, we should still send DM to the agent
@@ -313,6 +314,16 @@ export async function handleWebhook(payload) {
       reason: 'team_assignment_no_fallback' 
     }));
     return;
+  }
+  
+  // Log successful extraction for team+agent cases (for verification)
+  if (teamAssigneeId && assigneeId) {
+    console.log(JSON.stringify({
+      ...logEntry,
+      decision: 'extraction_success',
+      reason: 'team_and_agent_assigned',
+      message: 'Both team and agent assigned - processing agent assignment'
+    }));
   }
 
   // Fetch admin details to get actual email
