@@ -215,7 +215,7 @@ function generateAssignmentBlocks({
     });
   }
 
-  // Add button
+  // Add buttons: Open in Intercom + Opt-out
   blocks.push({
     type: 'actions',
     elements: [
@@ -227,7 +227,36 @@ function generateAssignmentBlocks({
           emoji: true
         },
         url: conversationLink,
-        action_id: 'open_intercom'
+        action_id: 'open_intercom',
+        style: 'primary'
+      },
+      {
+        type: 'button',
+        text: {
+          type: 'plain_text',
+          text: '🔕 Stop notifications',
+          emoji: true
+        },
+        action_id: 'opt_out',
+        style: 'danger',
+        confirm: {
+          title: {
+            type: 'plain_text',
+            text: 'Stop notifications?'
+          },
+          text: {
+            type: 'mrkdwn',
+            text: 'You won\'t receive notifications when Fin-handled conversations are assigned to you. You can opt back in anytime with `/fin-handoff opt-in`.'
+          },
+          confirm: {
+            type: 'plain_text',
+            text: 'Stop notifications'
+          },
+          deny: {
+            type: 'plain_text',
+            text: 'Cancel'
+          }
+        }
       }
     ]
   });

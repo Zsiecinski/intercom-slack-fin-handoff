@@ -60,8 +60,9 @@ This guide walks you through deploying the Intercom-Slack Fin Handoff service to
    - Wait for deployment to complete (usually 2-3 minutes)
 
 6. **Get your webhook URL**
-   - Once deployed, you'll get a URL like: `https://intercom-slack-fin-handoff.onrender.com`
-   - Your webhook endpoint will be: `https://intercom-slack-fin-handoff.onrender.com/intercom/webhook`
+   - Your Render service URL: `https://intercom-slack-fin-handoff.onrender.com`
+   - Your webhook endpoint: `https://intercom-slack-fin-handoff.onrender.com/intercom/webhook`
+   - Health check: `https://intercom-slack-fin-handoff.onrender.com/health`
 
 ### Option 2: Deploy from Render Dashboard (Manual)
 
@@ -78,7 +79,7 @@ This guide walks you through deploying the Intercom-Slack Fin Handoff service to
 2. Select your app
 3. Go to "Webhooks" → "Subscriptions"
 4. Create/Edit webhook subscription:
-   - **Endpoint URL**: `https://your-service.onrender.com/intercom/webhook`
+   - **Endpoint URL**: `https://intercom-slack-fin-handoff.onrender.com/intercom/webhook`
    - **Topic**: `conversation.admin.assigned`
    - **Permission**: `read_conversations`
 5. Save the subscription
@@ -87,7 +88,7 @@ This guide walks you through deploying the Intercom-Slack Fin Handoff service to
 
 1. **Check health endpoint:**
    ```bash
-   curl https://your-service.onrender.com/health
+   curl https://intercom-slack-fin-handoff.onrender.com/health
    ```
    Should return:
    ```json
@@ -181,7 +182,7 @@ If using free tier, add a simple ping service:
 1. Create a UptimeRobot account: https://uptimerobot.com
 2. Add a monitor:
    - Type: HTTP(s)
-   - URL: `https://your-service.onrender.com/health`
+   - URL: `https://intercom-slack-fin-handoff.onrender.com/health`
    - Interval: 5 minutes
 3. This will ping your service every 5 minutes to prevent sleeping
 

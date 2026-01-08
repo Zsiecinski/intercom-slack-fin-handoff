@@ -12,6 +12,7 @@ import {
   markAssignmentNotified 
 } from './dedupe.js';
 import { scheduleNudge } from './nudge.js';
+import { isOptedIn } from './preferences.js';
 
 const FIN_GATE_MODE = process.env.FIN_GATE_MODE || 'required'; // required | log_only
 const FALLBACK_CHANNEL = process.env.FALLBACK_CHANNEL;
@@ -264,6 +265,19 @@ export async function handleWebhook(payload) {
     }
   } else if (FIN_GATE_MODE === 'log_only') {
     console.log(`[${requestId}] FIN_GATE_MODE=log_only: Fin involved=${finCheck.involved}, but sending anyway`);
+  }
+
+  // Check opt-in preference
+  const userOptedIn = isOptedIn(assigneeEmail);
+  if (!userOptedIn) {
+    console.log(JSON.stringify({ 
+      ...logEntry, 
+      decision: 'ignored', 
+      reason: 'user_opted_out',
+      assigneeEmail
+    }));
+    markWebhookProcessed(webhookId, { conversationId, assigneeEmail });
+    return;
   }
 
   // Generate conversation link

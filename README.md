@@ -107,6 +107,17 @@ Receives Intercom webhooks. Verifies signature and processes `conversation.admin
 - `200` - Webhook received and processed
 - `401` - Invalid or missing signature
 
+### POST /slack/command
+Handles Slack slash commands for opt-in/opt-out.
+
+**Commands:**
+- `/fin-handoff opt-in` - Enable notifications
+- `/fin-handoff opt-out` - Disable notifications
+- `/fin-handoff status` - Check current status
+
+### POST /slack/interactive
+Handles Slack interactive button actions (opt-out button in DMs).
+
 ### GET /health
 Health check endpoint with stats.
 
@@ -120,8 +131,15 @@ Health check endpoint with stats.
     "ttlSeconds": 600
   },
   "nudge": {
+    "enabled": true,
     "scheduled": 3,
     "slaMinutes": 5
+  },
+  "preferences": {
+    "total": 10,
+    "optedIn": 8,
+    "optedOut": 2,
+    "defaultOptIn": true
   }
 }
 ```
@@ -181,13 +199,14 @@ Messages include:
 npm start
 ```
 
-### 2. Expose with ngrok
+### 2. Expose with ngrok (for local testing)
 ```bash
 ngrok http 3000
 ```
 
 ### 3. Configure Intercom Webhook
-- URL: `https://your-ngrok-url.ngrok.io/intercom/webhook`
+- **Production URL**: `https://intercom-slack-fin-handoff.onrender.com/intercom/webhook`
+- **Local Testing URL**: `https://your-ngrok-url.ngrok.io/intercom/webhook`
 - Topic: `conversation.admin.assigned`
 - Permission: `read_conversations`
 
@@ -261,15 +280,13 @@ Example log:
 
 See [DEPLOY.md](./DEPLOY.md) for detailed deployment instructions, including Render.com setup.
 
-### Quick Deploy to Render
+### Production URLs
 
-1. Push code to GitHub
-2. Create new Web Service on Render
-3. Connect GitHub repository
-4. Set environment variables (see DEPLOY.md)
-5. Deploy!
-
-Your webhook URL will be: `https://your-service.onrender.com/intercom/webhook`
+- **Service**: https://intercom-slack-fin-handoff.onrender.com
+- **Webhook Endpoint**: https://intercom-slack-fin-handoff.onrender.com/intercom/webhook
+- **Health Check**: https://intercom-slack-fin-handoff.onrender.com/health
+- **Slack Command**: https://intercom-slack-fin-handoff.onrender.com/slack/command
+- **Slack Interactive**: https://intercom-slack-fin-handoff.onrender.com/slack/interactive
 
 ## License
 
