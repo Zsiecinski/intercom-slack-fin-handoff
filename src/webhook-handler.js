@@ -86,7 +86,7 @@ export function extractAssignmentInfo(payload, requestId = 'unknown') {
         if (part.part_type === 'assignment' || part.part_type === 'default_assignment') {
           // Check assigned_to field (can be admin or team)
           if (part.assigned_to) {
-            // If assigned_to is an admin (not a team), use it
+            // If assigned_to is an admin (not a team or nobody), use it
             if (part.assigned_to.type === 'admin' && part.assigned_to.id) {
               assigneeId = String(part.assigned_to.id);
               if (part.assigned_to.email) {
@@ -95,13 +95,18 @@ export function extractAssignmentInfo(payload, requestId = 'unknown') {
               if (part.assigned_to.name) {
                 assigneeName = part.assigned_to.name;
               }
+            } else if (part.assigned_to.type === 'nobody_admin' || part.assigned_to.type === 'nobody') {
+              // Conversation is unassigned - skip it (don't set assigneeId)
+              // This is expected behavior for unassigned conversations
             } else if (part.assigned_to.type === 'team' && !assigneeId) {
               // Skip team assignments, but don't overwrite if we already have an admin
               // This handles cases where both team and admin are in conversation_parts
             } else if (part.assigned_to.id && !assigneeId) {
               // Fallback: use id even if type is not explicitly 'admin' or 'team'
-              // Only if type is not 'team'
-              if (part.assigned_to.type !== 'team') {
+              // Only if type is not 'team' or 'nobody'
+              if (part.assigned_to.type !== 'team' && 
+                  part.assigned_to.type !== 'nobody_admin' && 
+                  part.assigned_to.type !== 'nobody') {
                 assigneeId = String(part.assigned_to.id);
               }
             }
@@ -187,6 +192,14 @@ export function extractAssignmentInfo(payload, requestId = 'unknown') {
             author_type: p.author?.type,
             author_id: p.author?.id
           }));
+          
+          // Check if conversation is unassigned (nobody_admin)
+          const unassignedPart = assignmentParts.find(
+            p => p.assigned_to?.type === 'nobody_admin' || p.assigned_to?.type === 'nobody'
+          );
+          if (unassignedPart) {
+            debugInfo.reason_note = 'Conversation is unassigned (nobody_admin) - this is expected';
+          }
         }
       }
       
