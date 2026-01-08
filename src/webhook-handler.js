@@ -29,9 +29,10 @@ export function getConversationLink(conversationId) {
 /**
  * Extract conversation ID and assignee ID from webhook payload
  * @param {Object} payload - Webhook payload
+ * @param {string} requestId - Request ID for logging
  * @returns {Object|null} - { conversationId, assigneeId, assigneeEmail, assigneeName, teamAssigneeId, lastAssignmentAt } or null
  */
-function extractAssignmentInfo(payload, requestId = 'unknown') {
+export function extractAssignmentInfo(payload, requestId = 'unknown') {
   try {
     const item = payload.data?.item || payload.item || payload.data;
     

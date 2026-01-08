@@ -192,29 +192,65 @@ Messages include:
 - **Warning**: If email contains links
 - **Button**: "Open in Intercom" link
 
-## Testing Locally
+## Testing
 
-### 1. Start Server
+### Unit Tests
+
+#### Test Token Configuration
+```bash
+npm run test-tokens
+```
+Verifies that Intercom and Slack tokens are configured correctly.
+
+#### Test Webhook Extraction Logic
+```bash
+npm run test-extraction
+```
+Tests the webhook payload extraction logic with various scenarios:
+- Standard admin assignment
+- Team + agent assignment (critical fix)
+- Conversation parts assignments
+- Edge cases (team-only, missing data, etc.)
+
+### Manual Testing
+
+#### 1. Start Server
 ```bash
 npm start
 ```
 
-### 2. Expose with ngrok (for local testing)
+#### 2. Send Test Webhook
+In another terminal, send a test webhook:
+```bash
+# Standard admin assignment
+npm run test-webhook standard
+
+# Team + agent assignment (tests the fix)
+npm run test-webhook team-agent
+
+# Team only (should be ignored)
+npm run test-webhook team-only
+
+# Conversation parts format
+npm run test-webhook conversation-parts
+```
+
+#### 3. Expose with ngrok (for real Intercom webhooks)
 ```bash
 ngrok http 3000
 ```
 
-### 3. Configure Intercom Webhook
+#### 4. Configure Intercom Webhook
 - **Production URL**: `https://intercom-slack-fin-handoff.onrender.com/intercom/webhook`
 - **Local Testing URL**: `https://your-ngrok-url.ngrok.io/intercom/webhook`
 - Topic: `conversation.admin.assigned`
 - Permission: `read_conversations`
 
-### 4. Test Webhook
+#### 5. Test Real Webhook
 Assign a conversation in Intercom and check:
 - Server logs (structured JSON)
 - Slack DM or fallback channel
-- Health endpoint stats
+- Health endpoint stats (`GET /health`)
 
 ## Logging
 
