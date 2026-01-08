@@ -303,26 +303,33 @@ export async function handleWebhook(payload) {
 
   logEntry.conversationId = conversationId;
   logEntry.assigneeId = assigneeId;
-  logEntry.teamAssigneeId = teamAssigneeId || null;
 
-  // Noise control: Skip team-only assignments (no agent) unless FALLBACK_CHANNEL is set
-  // If both team and agent are assigned, we should still send DM to the agent
-  if (teamAssigneeId && !assigneeId && !FALLBACK_CHANNEL) {
+  // Simple logic: Only process if there's an agent assigned
+  // Ignore teams completely - if there's an agent, notify them regardless of team assignment
+  if (!assigneeId) {
+    // No agent assigned - skip (even if there's a team, we don't care)
+    if (teamAssigneeId && FALLBACK_CHANNEL) {
+      // Team-only assignment with fallback channel - could post to channel if needed
+      // But for now, we'll skip team-only assignments entirely
+    }
     console.log(JSON.stringify({ 
       ...logEntry, 
       decision: 'ignored', 
-      reason: 'team_assignment_no_fallback' 
+      reason: 'no_agent_assigned',
+      teamAssigneeId: teamAssigneeId || null
     }));
     return;
   }
   
-  // Log successful extraction for team+agent cases (for verification)
-  if (teamAssigneeId && assigneeId) {
+  // We have an agent - process it (ignore any team assignment)
+  if (teamAssigneeId) {
+    // Log that we're ignoring the team and processing the agent
     console.log(JSON.stringify({
       ...logEntry,
-      decision: 'extraction_success',
-      reason: 'team_and_agent_assigned',
-      message: 'Both team and agent assigned - processing agent assignment'
+      decision: 'processing',
+      reason: 'agent_assigned',
+      note: 'Team also assigned but ignoring - processing agent assignment only',
+      teamAssigneeId
     }));
   }
 
