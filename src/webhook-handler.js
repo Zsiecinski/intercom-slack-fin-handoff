@@ -56,18 +56,32 @@ function extractAssignmentInfo(payload) {
     if (item.conversation_parts?.conversation_parts) {
       for (const part of item.conversation_parts.conversation_parts) {
         if (part.part_type === 'assignment' || part.part_type === 'default_assignment') {
-          if (part.assigned_to?.id) {
-            assigneeId = String(part.assigned_to.id);
+          // Check assigned_to field (can be admin or team)
+          if (part.assigned_to) {
+            // If assigned_to is an admin (not a team), use it
+            if (part.assigned_to.type === 'admin' && part.assigned_to.id) {
+              assigneeId = String(part.assigned_to.id);
+              if (part.assigned_to.email) {
+                assigneeEmail = part.assigned_to.email;
+              }
+              if (part.assigned_to.name) {
+                assigneeName = part.assigned_to.name;
+              }
+            } else if (part.assigned_to.id && !assigneeId) {
+              // Fallback: use id even if type is not explicitly 'admin'
+              assigneeId = String(part.assigned_to.id);
+            }
           }
           
+          // Check author field as fallback
           if (part.author?.id && part.author?.type === 'admin') {
             if (!assigneeId) {
               assigneeId = String(part.author.id);
             }
-            if (part.author.email) {
+            if (part.author.email && !assigneeEmail) {
               assigneeEmail = part.author.email;
             }
-            if (part.author.name) {
+            if (part.author.name && !assigneeName) {
               assigneeName = part.author.name;
             }
           }
@@ -93,7 +107,30 @@ function extractAssignmentInfo(payload) {
       }
     }
 
-    if (!conversationId || !assigneeId) {
+    // If we have a conversationId but no assigneeId, log for debugging
+    // (This can happen when only a team is assigned, which is handled later)
+    if (!conversationId) {
+      console.error('Extraction failed: missing conversationId', { 
+        hasDataItem: !!payload.data?.item,
+        hasItem: !!payload.item,
+        hasData: !!payload.data,
+        payloadKeys: Object.keys(payload)
+      });
+      return null;
+    }
+    
+    if (!assigneeId) {
+      // This is OK if only team is assigned - we'll handle that in the handler
+      // But log it for debugging when both might be expected
+      if (teamAssigneeId) {
+        console.log('Extraction: team assigned but no agent assigneeId found', {
+          conversationId,
+          teamAssigneeId,
+          hasAdminAssigneeId: !!item.admin_assignee_id,
+          hasConversationParts: !!item.conversation_parts?.conversation_parts
+        });
+      }
+      // Return null if no assigneeId - we need an agent to send DM
       return null;
     }
 
@@ -159,8 +196,9 @@ export async function handleWebhook(payload) {
   logEntry.conversationId = conversationId;
   logEntry.assigneeId = assigneeId;
 
-  // Noise control: Skip team assignments unless FALLBACK_CHANNEL is set
-  if (teamAssigneeId && !FALLBACK_CHANNEL) {
+  // Noise control: Skip team-only assignments (no agent) unless FALLBACK_CHANNEL is set
+  // If both team and agent are assigned, we should still send DM to the agent
+  if (teamAssigneeId && !assigneeId && !FALLBACK_CHANNEL) {
     console.log(JSON.stringify({ 
       ...logEntry, 
       decision: 'ignored', 
