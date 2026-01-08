@@ -266,36 +266,70 @@ export async function handleWebhook(payload) {
     const item = payload.data?.item || payload.item || payload.data;
     const conversationId = item?.id || item?.conversation_id || payload.conversation_id || payload.data?.id;
     
-    if (conversationId) {
+      if (conversationId) {
       console.log(`[${requestId}] Extraction failed, attempting fallback fetch for conversation ${conversationId}`);
       try {
         const conversation = await getConversation(conversationId);
         
-        // Extract assignment from fetched conversation
+        // Extract assignment from fetched conversation - check multiple sources
         const teamAssigneeId = conversation.team?.id || conversation.team_assignee_id;
-        const assigneeId = conversation.admin_assignee_id || conversation.admin_assignee?.id;
+        let assigneeId = conversation.admin_assignee_id || conversation.admin_assignee?.id;
+        let assigneeEmail = conversation.admin_assignee?.email || null;
+        let assigneeName = conversation.admin_assignee?.name || null;
         const lastAssignmentAt = conversation.statistics?.last_assignment_at || conversation.last_assignment_at;
+        
+        // Also check conversation_parts if assigneeId not found in top-level fields
+        if (!assigneeId && conversation.conversation_parts?.conversation_parts) {
+          for (const part of conversation.conversation_parts.conversation_parts) {
+            if (part.part_type === 'assignment' || part.part_type === 'default_assignment') {
+              if (part.assigned_to?.type === 'admin' && part.assigned_to.id) {
+                assigneeId = String(part.assigned_to.id);
+                if (part.assigned_to.email) assigneeEmail = part.assigned_to.email;
+                if (part.assigned_to.name) assigneeName = part.assigned_to.name;
+                break; // Found it, stop looking
+              }
+            }
+          }
+        }
         
         if (assigneeId) {
           assignmentInfo = {
             conversationId: String(conversationId),
             assigneeId: String(assigneeId),
-            assigneeEmail: conversation.admin_assignee?.email || null,
-            assigneeName: conversation.admin_assignee?.name || null,
+            assigneeEmail: assigneeEmail,
+            assigneeName: assigneeName,
             teamAssigneeId: teamAssigneeId ? String(teamAssigneeId) : null,
             lastAssignmentAt: lastAssignmentAt ? (typeof lastAssignmentAt === 'number' ? lastAssignmentAt : new Date(lastAssignmentAt).getTime() / 1000) : null
           };
-          console.log(`[${requestId}] Fallback extraction succeeded`, { assigneeId, teamAssigneeId });
+          console.log(JSON.stringify({
+            requestId,
+            decision: 'fallback_success',
+            reason: 'fetched_from_api',
+            conversationId,
+            assigneeId,
+            teamAssigneeId: teamAssigneeId || null,
+            source: assigneeId === conversation.admin_assignee_id ? 'top_level' : 'conversation_parts'
+          }));
         } else {
-          console.log(`[${requestId}] Fallback fetch found conversation but no admin assignee`, { 
-            conversationId, 
-            teamAssigneeId,
+          console.log(JSON.stringify({
+            requestId,
+            decision: 'fallback_no_assignee',
+            reason: 'conversation_fetched_but_no_admin',
+            conversationId,
+            teamAssigneeId: teamAssigneeId || null,
             hasAdminAssigneeId: !!conversation.admin_assignee_id,
-            hasAdminAssignee: !!conversation.admin_assignee
-          });
+            hasAdminAssignee: !!conversation.admin_assignee,
+            conversationPartsCount: conversation.conversation_parts?.conversation_parts?.length || 0
+          }));
         }
       } catch (err) {
-        console.error(`[${requestId}] Fallback fetch failed:`, err);
+        console.error(JSON.stringify({
+          requestId,
+          decision: 'fallback_error',
+          reason: 'api_fetch_failed',
+          conversationId,
+          error: err.message
+        }));
       }
     }
     
