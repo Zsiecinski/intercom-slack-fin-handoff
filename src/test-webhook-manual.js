@@ -112,8 +112,10 @@ async function sendTestWebhook(scenario = 'standard') {
     .update(payloadString)
     .digest('hex');
   
+  // Allow testing against production or local
+  const testUrl = process.env.TEST_WEBHOOK_URL;
   const port = process.env.PORT || 3000;
-  const url = `http://localhost:${port}/intercom/webhook`;
+  const url = testUrl || `http://localhost:${port}/intercom/webhook`;
   
   console.log(`\n🚀 Sending test webhook: ${scenario}`);
   console.log('─'.repeat(60));
