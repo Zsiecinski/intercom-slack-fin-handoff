@@ -153,8 +153,15 @@ async function sendTestWebhook(scenario = 'standard') {
     }
     
   } catch (err) {
-    console.error('\n❌ Error sending webhook:', err.message);
-    console.log('\n💡 Make sure the server is running: npm start');
+    if (err.code === 'ECONNREFUSED' || err.message.includes('fetch failed')) {
+      console.error('\n❌ Error: Could not connect to server');
+      console.log('\n💡 To test webhooks, you need to:');
+      console.log('   1. Start the server in another terminal: npm start');
+      console.log('   2. Then run this test again: npm run test-webhook ' + scenario);
+      console.log('\n   Or run unit tests (no server needed): npm run test-extraction');
+    } else {
+      console.error('\n❌ Error sending webhook:', err.message);
+    }
     process.exit(1);
   }
 }
