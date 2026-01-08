@@ -31,18 +31,22 @@ export function getConversationLink(conversationId) {
  * @param {Object} payload - Webhook payload
  * @returns {Object|null} - { conversationId, assigneeId, assigneeEmail, assigneeName, teamAssigneeId, lastAssignmentAt } or null
  */
-function extractAssignmentInfo(payload) {
+function extractAssignmentInfo(payload, requestId = 'unknown') {
   try {
     const item = payload.data?.item || payload.item || payload.data;
     
     if (!item) {
-      // Log payload structure for debugging
-      console.error('Extraction failed: no item found', {
+      // Log payload structure for debugging in structured format
+      const debugInfo = {
+        requestId,
+        extractionStep: 'no_item',
         hasData: !!payload.data,
         hasItem: !!payload.item,
-        payloadKeys: Object.keys(payload),
-        dataKeys: payload.data ? Object.keys(payload.data) : null
-      });
+        payloadKeys: Object.keys(payload).slice(0, 30),
+        dataKeys: payload.data ? Object.keys(payload.data).slice(0, 30) : null,
+        topic: payload.topic || payload.type
+      };
+      console.log(JSON.stringify({ ...debugInfo, decision: 'extraction_failed', reason: 'no_item' }));
       return null;
     }
     
@@ -139,38 +143,53 @@ function extractAssignmentInfo(payload) {
     // If we have a conversationId but no assigneeId, log for debugging
     // (This can happen when only a team is assigned, which is handled later)
     if (!conversationId) {
-      console.error('Extraction failed: missing conversationId', { 
+      const debugInfo = {
+        requestId,
+        extractionStep: 'missing_conversationId',
         hasDataItem: !!payload.data?.item,
         hasItem: !!payload.item,
         hasData: !!payload.data,
-        payloadKeys: Object.keys(payload)
-      });
+        payloadKeys: Object.keys(payload).slice(0, 30),
+        itemKeys: item ? Object.keys(item).slice(0, 30) : null
+      };
+      console.log(JSON.stringify({ ...debugInfo, decision: 'extraction_failed', reason: 'missing_conversationId' }));
       return null;
     }
     
     if (!assigneeId) {
       // This is OK if only team is assigned - we'll handle that in the handler
       // But log it for debugging when both might be expected
-      if (teamAssigneeId) {
-        console.log('Extraction: team assigned but no agent assigneeId found', {
-          conversationId,
-          teamAssigneeId,
-          hasAdminAssigneeId: !!item.admin_assignee_id,
-          hasAdminAssignee: !!item.admin_assignee,
-          hasConversationParts: !!item.conversation_parts?.conversation_parts,
-          itemKeys: Object.keys(item).slice(0, 20), // First 20 keys for debugging
-          payloadDataKeys: payload.data ? Object.keys(payload.data).slice(0, 20) : null
-        });
-      } else {
-        // Log even when no team is assigned to help debug extraction failures
-        console.log('Extraction: no assigneeId found', {
-          conversationId,
-          hasAdminAssigneeId: !!item.admin_assignee_id,
-          hasAdminAssignee: !!item.admin_assignee,
-          hasConversationParts: !!item.conversation_parts?.conversation_parts,
-          itemKeys: Object.keys(item).slice(0, 20)
-        });
+      const debugInfo = {
+        requestId,
+        extractionStep: 'missing_assigneeId',
+        conversationId,
+        teamAssigneeId: teamAssigneeId || null,
+        hasAdminAssigneeId: !!item.admin_assignee_id,
+        hasAdminAssignee: !!item.admin_assignee,
+        hasConversationParts: !!item.conversation_parts?.conversation_parts,
+        conversationPartsCount: item.conversation_parts?.conversation_parts?.length || 0,
+        itemKeys: Object.keys(item).slice(0, 30),
+        payloadDataKeys: payload.data ? Object.keys(payload.data).slice(0, 30) : null
+      };
+      
+      // Check conversation_parts for any assignment info
+      if (item.conversation_parts?.conversation_parts) {
+        const assignmentParts = item.conversation_parts.conversation_parts.filter(
+          p => p.part_type === 'assignment' || p.part_type === 'default_assignment'
+        );
+        debugInfo.assignmentPartsCount = assignmentParts.length;
+        if (assignmentParts.length > 0) {
+          debugInfo.assignmentParts = assignmentParts.map(p => ({
+            part_type: p.part_type,
+            assigned_to_type: p.assigned_to?.type,
+            assigned_to_id: p.assigned_to?.id,
+            author_type: p.author?.type,
+            author_id: p.author?.id
+          }));
+        }
       }
+      
+      console.log(JSON.stringify({ ...debugInfo, decision: 'extraction_failed', reason: 'missing_assigneeId' }));
       // Return null if no assigneeId - we need an agent to send DM
       return null;
     }
@@ -184,7 +203,13 @@ function extractAssignmentInfo(payload) {
       lastAssignmentAt: lastAssignmentAt ? (typeof lastAssignmentAt === 'number' ? lastAssignmentAt : new Date(lastAssignmentAt).getTime() / 1000) : null
     };
   } catch (err) {
-    console.error('Error extracting assignment info:', err);
+    const errorInfo = {
+      requestId,
+      extractionStep: 'exception',
+      error: err.message,
+      stack: err.stack?.split('\n').slice(0, 5)
+    };
+    console.log(JSON.stringify({ ...errorInfo, decision: 'extraction_failed', reason: 'exception' }));
     return null;
   }
 }
@@ -219,7 +244,7 @@ export async function handleWebhook(payload) {
   }
 
   // Extract assignment info
-  let assignmentInfo = extractAssignmentInfo(payload);
+  let assignmentInfo = extractAssignmentInfo(payload, requestId);
   
   // Fallback: if extraction failed but we have a conversationId, try fetching from API
   if (!assignmentInfo) {
