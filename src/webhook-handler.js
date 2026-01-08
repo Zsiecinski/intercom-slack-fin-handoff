@@ -36,12 +36,19 @@ function extractAssignmentInfo(payload) {
     const item = payload.data?.item || payload.item || payload.data;
     
     if (!item) {
+      // Log payload structure for debugging
+      console.error('Extraction failed: no item found', {
+        hasData: !!payload.data,
+        hasItem: !!payload.item,
+        payloadKeys: Object.keys(payload),
+        dataKeys: payload.data ? Object.keys(payload.data) : null
+      });
       return null;
     }
     
-    const conversationId = item.id || item.conversation_id || payload.conversation_id;
-    const teamAssigneeId = item.team_assignee_id;
-    const lastAssignmentAt = item.statistics?.last_assignment_at || payload.created_at;
+    const conversationId = item.id || item.conversation_id || payload.conversation_id || payload.data?.id;
+    const teamAssigneeId = item.team_assignee_id || item.team?.id || payload.data?.team_assignee_id;
+    const lastAssignmentAt = item.statistics?.last_assignment_at || item.last_assignment_at || payload.created_at || payload.timestamp;
     
     let assigneeId = null;
     let assigneeEmail = null;
@@ -50,6 +57,22 @@ function extractAssignmentInfo(payload) {
     // Check admin_assignee_id (most common format)
     if (item.admin_assignee_id) {
       assigneeId = String(item.admin_assignee_id);
+    }
+    
+    // Check admin_assignee object format
+    if (!assigneeId && item.admin_assignee) {
+      if (typeof item.admin_assignee === 'string') {
+        assigneeId = item.admin_assignee;
+      } else if (item.admin_assignee.id) {
+        assigneeId = String(item.admin_assignee.id);
+        assigneeEmail = item.admin_assignee.email;
+        assigneeName = item.admin_assignee.name;
+      }
+    }
+    
+    // Check data level admin_assignee_id
+    if (!assigneeId && payload.data?.admin_assignee_id) {
+      assigneeId = String(payload.data.admin_assignee_id);
     }
     
     // Check conversation_parts for assignment info
@@ -67,9 +90,15 @@ function extractAssignmentInfo(payload) {
               if (part.assigned_to.name) {
                 assigneeName = part.assigned_to.name;
               }
+            } else if (part.assigned_to.type === 'team' && !assigneeId) {
+              // Skip team assignments, but don't overwrite if we already have an admin
+              // This handles cases where both team and admin are in conversation_parts
             } else if (part.assigned_to.id && !assigneeId) {
-              // Fallback: use id even if type is not explicitly 'admin'
-              assigneeId = String(part.assigned_to.id);
+              // Fallback: use id even if type is not explicitly 'admin' or 'team'
+              // Only if type is not 'team'
+              if (part.assigned_to.type !== 'team') {
+                assigneeId = String(part.assigned_to.id);
+              }
             }
           }
           
@@ -127,7 +156,19 @@ function extractAssignmentInfo(payload) {
           conversationId,
           teamAssigneeId,
           hasAdminAssigneeId: !!item.admin_assignee_id,
-          hasConversationParts: !!item.conversation_parts?.conversation_parts
+          hasAdminAssignee: !!item.admin_assignee,
+          hasConversationParts: !!item.conversation_parts?.conversation_parts,
+          itemKeys: Object.keys(item).slice(0, 20), // First 20 keys for debugging
+          payloadDataKeys: payload.data ? Object.keys(payload.data).slice(0, 20) : null
+        });
+      } else {
+        // Log even when no team is assigned to help debug extraction failures
+        console.log('Extraction: no assigneeId found', {
+          conversationId,
+          hasAdminAssigneeId: !!item.admin_assignee_id,
+          hasAdminAssignee: !!item.admin_assignee,
+          hasConversationParts: !!item.conversation_parts?.conversation_parts,
+          itemKeys: Object.keys(item).slice(0, 20)
         });
       }
       // Return null if no assigneeId - we need an agent to send DM
@@ -178,10 +219,51 @@ export async function handleWebhook(payload) {
   }
 
   // Extract assignment info
-  const assignmentInfo = extractAssignmentInfo(payload);
+  let assignmentInfo = extractAssignmentInfo(payload);
+  
+  // Fallback: if extraction failed but we have a conversationId, try fetching from API
   if (!assignmentInfo) {
-    console.log(JSON.stringify({ ...logEntry, decision: 'ignored', reason: 'extraction_failed' }));
-    return;
+    // Try to get conversationId from payload for fallback fetch
+    const item = payload.data?.item || payload.item || payload.data;
+    const conversationId = item?.id || item?.conversation_id || payload.conversation_id || payload.data?.id;
+    
+    if (conversationId) {
+      console.log(`[${requestId}] Extraction failed, attempting fallback fetch for conversation ${conversationId}`);
+      try {
+        const conversation = await getConversation(conversationId);
+        
+        // Extract assignment from fetched conversation
+        const teamAssigneeId = conversation.team?.id || conversation.team_assignee_id;
+        const assigneeId = conversation.admin_assignee_id || conversation.admin_assignee?.id;
+        const lastAssignmentAt = conversation.statistics?.last_assignment_at || conversation.last_assignment_at;
+        
+        if (assigneeId) {
+          assignmentInfo = {
+            conversationId: String(conversationId),
+            assigneeId: String(assigneeId),
+            assigneeEmail: conversation.admin_assignee?.email || null,
+            assigneeName: conversation.admin_assignee?.name || null,
+            teamAssigneeId: teamAssigneeId ? String(teamAssigneeId) : null,
+            lastAssignmentAt: lastAssignmentAt ? (typeof lastAssignmentAt === 'number' ? lastAssignmentAt : new Date(lastAssignmentAt).getTime() / 1000) : null
+          };
+          console.log(`[${requestId}] Fallback extraction succeeded`, { assigneeId, teamAssigneeId });
+        } else {
+          console.log(`[${requestId}] Fallback fetch found conversation but no admin assignee`, { 
+            conversationId, 
+            teamAssigneeId,
+            hasAdminAssigneeId: !!conversation.admin_assignee_id,
+            hasAdminAssignee: !!conversation.admin_assignee
+          });
+        }
+      } catch (err) {
+        console.error(`[${requestId}] Fallback fetch failed:`, err);
+      }
+    }
+    
+    if (!assignmentInfo) {
+      console.log(JSON.stringify({ ...logEntry, decision: 'ignored', reason: 'extraction_failed' }));
+      return;
+    }
   }
 
   const { 
