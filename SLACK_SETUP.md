@@ -13,7 +13,7 @@ To enable the opt-in/opt-out feature, you need to configure a Slack slash comman
 
 Fill in the form:
 
-- **Command**: `/fin-handoff`
+- **Command**: `/cx-alerts`
 - **Request URL**: `https://intercom-slack-fin-handoff.onrender.com/slack/command`
 - **Short Description**: `Manage Fin handoff notifications`
 - **Usage Hint**: `opt-in | opt-out | status`
@@ -49,9 +49,9 @@ After adding the slash command and interactive components:
 
 Once configured, users can:
 
-- **Opt in**: `/fin-handoff opt-in`
-- **Opt out**: `/fin-handoff opt-out`
-- **Check status**: `/fin-handoff status`
+- **Opt in**: `/cx-alerts opt-in`
+- **Opt out**: `/cx-alerts opt-out`
+- **Check status**: `/cx-alerts status`
 
 Or click the **"🔕 Stop notifications"** button in any notification DM.
 
@@ -59,19 +59,19 @@ Or click the **"🔕 Stop notifications"** button in any notification DM.
 
 1. Test the slash command:
    ```
-   /fin-handoff status
+   /cx-alerts status
    ```
    Should show your current opt-in status.
 
 2. Test opt-out:
    ```
-   /fin-handoff opt-out
+   /cx-alerts opt-out
    ```
    Should confirm notifications are disabled.
 
 3. Test opt-in:
    ```
-   /fin-handoff opt-in
+   /cx-alerts opt-in
    ```
    Should confirm notifications are enabled.
 

@@ -29,7 +29,7 @@ export async function handleSlashCommand(req, res) {
   const { command, text, user_id, response_url } = req.body;
 
   // Verify it's from Slack
-  if (!command || command !== '/fin-handoff') {
+  if (!command || command !== '/cx-alerts') {
     console.warn(JSON.stringify({
       event: 'unknown_command',
       command: command,
@@ -114,7 +114,7 @@ export async function handleSlashCommand(req, res) {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: '✅ *You\'re now opted in*\n\nYou\'ll receive notifications when Fin-handled conversations are assigned to you.\n\nUse `/fin-handoff opt-out` to stop notifications.'
+                text: '✅ *You\'re now opted in*\n\nYou\'ll receive notifications when Fin-handled conversations are assigned to you.\n\nUse `/cx-alerts opt-out` to stop notifications.'
               }
             }
           ]
@@ -132,7 +132,7 @@ export async function handleSlashCommand(req, res) {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: '🔕 *Notifications disabled*\n\nYou won\'t receive notifications when Fin-handled conversations are assigned to you.\n\nUse `/fin-handoff opt-in` to re-enable notifications.'
+                text: '🔕 *Notifications disabled*\n\nYou won\'t receive notifications when Fin-handled conversations are assigned to you.\n\nUse `/cx-alerts opt-in` to re-enable notifications.'
               }
             }
           ]
@@ -150,8 +150,8 @@ export async function handleSlashCommand(req, res) {
               text: {
                 type: 'mrkdwn',
                 text: optedIn 
-                  ? '✅ *You\'re opted in*\n\nYou\'ll receive notifications when Fin-handled conversations are assigned to you.\n\nUse `/fin-handoff opt-out` to stop notifications.'
-                  : '🔕 *You\'re opted out*\n\nYou won\'t receive notifications when Fin-handled conversations are assigned to you.\n\nUse `/fin-handoff opt-in` to start receiving notifications.'
+                ? '✅ *You\'re opted in*\n\nYou\'ll receive notifications when Fin-handled conversations are assigned to you.\n\nUse `/cx-alerts opt-out` to stop notifications.'
+                : '🔕 *You\'re opted out*\n\nYou won\'t receive notifications when Fin-handled conversations are assigned to you.\n\nUse `/cx-alerts opt-in` to start receiving notifications.'
               }
             }
           ]

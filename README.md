@@ -111,9 +111,9 @@ Receives Intercom webhooks. Verifies signature and processes `conversation.admin
 Handles Slack slash commands for opt-in/opt-out.
 
 **Commands:**
-- `/fin-handoff opt-in` - Enable notifications
-- `/fin-handoff opt-out` - Disable notifications
-- `/fin-handoff status` - Check current status
+- `/cx-alerts opt-in` - Enable notifications
+- `/cx-alerts opt-out` - Disable notifications
+- `/cx-alerts status` - Check current status
 
 ### POST /slack/interactive
 Handles Slack interactive button actions (opt-out button in DMs).

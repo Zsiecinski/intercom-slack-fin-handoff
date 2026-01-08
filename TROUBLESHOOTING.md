@@ -1,6 +1,6 @@
 # Troubleshooting "dispatch_failed" Error
 
-If you're getting a `dispatch_failed` error when using `/fin-handoff`, here's how to debug and fix it.
+If you're getting a `dispatch_failed` error when using `/cx-alerts`, here's how to debug and fix it.
 
 ## What "dispatch_failed" Means
 
@@ -15,7 +15,7 @@ Slack returns `dispatch_failed` when:
 1. Go to your Render dashboard: https://dashboard.render.com
 2. Select your service: `intercom-slack-fin-handoff`
 3. Click on **"Logs"** tab
-4. Try the command again: `/fin-handoff status`
+4. Try the command again: `/cx-alerts status`
 5. Look for log entries with `slash_command_received` or `handle_slash_command`
 
 You should see structured JSON logs like:
@@ -37,7 +37,7 @@ Test the endpoint directly:
 ```bash
 curl -X POST https://intercom-slack-fin-handoff.onrender.com/slack/command \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "command=/fin-handoff&text=status&user_id=U123456"
+  -d "command=/cx-alerts&text=status&user_id=U123456"
 ```
 
 Should return a JSON response (even if it's an error).
@@ -48,7 +48,7 @@ Should return a JSON response (even if it's an error).
 2. Select your app
 3. Go to **"Slash Commands"**
 4. Verify:
-   - Command: `/fin-handoff`
+   - Command: `/cx-alerts`
    - Request URL: `https://intercom-slack-fin-handoff.onrender.com/slack/command`
    - URL is accessible (no typos)
 
@@ -105,7 +105,7 @@ Test the endpoint manually:
 # Test status command
 curl -X POST https://intercom-slack-fin-handoff.onrender.com/slack/command \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "command=/fin-handoff&text=status&user_id=YOUR_SLACK_USER_ID&team_id=T123456"
+  -d "command=/cx-alerts&text=status&user_id=YOUR_SLACK_USER_ID&team_id=T123456"
 ```
 
 Replace `YOUR_SLACK_USER_ID` with your actual Slack user ID (starts with `U`).

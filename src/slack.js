@@ -246,7 +246,7 @@ function generateAssignmentBlocks({
           },
           text: {
             type: 'mrkdwn',
-            text: 'You won\'t receive notifications when Fin-handled conversations are assigned to you. You can opt back in anytime with `/fin-handoff opt-in`.'
+            text: 'You won\'t receive notifications when Fin-handled conversations are assigned to you. You can opt back in anytime with `/cx-alerts opt-in`.'
           },
           confirm: {
             type: 'plain_text',
