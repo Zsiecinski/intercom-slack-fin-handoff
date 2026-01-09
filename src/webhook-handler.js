@@ -85,6 +85,8 @@ export function extractAssignmentInfo(payload, requestId = 'unknown') {
       for (const part of item.conversation_parts.conversation_parts) {
         if (part.part_type === 'assignment' || part.part_type === 'default_assignment') {
           // Check assigned_to field (can be admin or team)
+          // IMPORTANT: We check who it's assigned TO, not who assigned it
+          // So bot assignments (like Hannah) work fine - we only care about the assignee
           if (part.assigned_to) {
             // If assigned_to is an admin (not a team or nobody), use it
             if (part.assigned_to.type === 'admin' && part.assigned_to.id) {
@@ -112,11 +114,13 @@ export function extractAssignmentInfo(payload, requestId = 'unknown') {
             }
           }
           
-          // Check author field as fallback
-          if (part.author?.id && part.author?.type === 'admin') {
-            if (!assigneeId) {
-              assigneeId = String(part.author.id);
-            }
+          // Check author field as fallback (only if assigned_to didn't work)
+          // Note: We check who it's assigned TO (assigned_to), not who assigned it (author)
+          // So bot assignments (like Hannah) work fine as long as assigned_to is an admin
+          if (part.author?.id && part.author?.type === 'admin' && !assigneeId) {
+            // Only use author as fallback if we haven't found assigneeId from assigned_to
+            // This handles edge cases where assigned_to might be missing but author is an admin
+            assigneeId = String(part.author.id);
             if (part.author.email && !assigneeEmail) {
               assigneeEmail = part.author.email;
             }
