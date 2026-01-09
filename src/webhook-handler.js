@@ -82,8 +82,11 @@ export function extractAssignmentInfo(payload, requestId = 'unknown') {
     }
     
     // Check conversation_parts for assignment info
+    // IMPORTANT: Check in REVERSE order (most recent first) to catch latest assignments
     if (item.conversation_parts?.conversation_parts) {
-      for (const part of item.conversation_parts.conversation_parts) {
+      // Reverse the array to check most recent parts first
+      const parts = [...item.conversation_parts.conversation_parts].reverse();
+      for (const part of parts) {
         if (part.part_type === 'assignment' || part.part_type === 'default_assignment') {
           // Check assigned_to field (can be admin or team)
           // IMPORTANT: We check who it's assigned TO, not who assigned it
@@ -98,12 +101,14 @@ export function extractAssignmentInfo(payload, requestId = 'unknown') {
               if (part.assigned_to.name) {
                 assigneeName = part.assigned_to.name;
               }
+              // Found admin assignment - stop looking (most recent wins)
+              break;
             } else if (part.assigned_to.type === 'nobody_admin' || part.assigned_to.type === 'nobody') {
-              // Conversation is unassigned - skip it (don't set assigneeId)
-              // This is expected behavior for unassigned conversations
+              // Conversation is unassigned - continue looking for earlier assignments
+              // Don't break here, as there might be an earlier assignment
             } else if (part.assigned_to.type === 'team' && !assigneeId) {
               // Skip team assignments, but don't overwrite if we already have an admin
-              // This handles cases where both team and admin are in conversation_parts
+              // Continue looking for admin assignments
             } else if (part.assigned_to.id && !assigneeId) {
               // Fallback: use id even if type is not explicitly 'admin' or 'team'
               // Only if type is not 'team' or 'nobody'
@@ -111,6 +116,8 @@ export function extractAssignmentInfo(payload, requestId = 'unknown') {
                   part.assigned_to.type !== 'nobody_admin' && 
                   part.assigned_to.type !== 'nobody') {
                 assigneeId = String(part.assigned_to.id);
+                // Found potential assignment - stop looking
+                break;
               }
             }
           }
@@ -128,6 +135,8 @@ export function extractAssignmentInfo(payload, requestId = 'unknown') {
             if (part.author.name && !assigneeName) {
               assigneeName = part.author.name;
             }
+            // Found admin author - stop looking
+            break;
           }
         }
       }
@@ -250,8 +259,15 @@ export async function handleWebhook(payload) {
     timestamp: new Date().toISOString()
   };
 
-  // Check topic - handle both admin and team assignment webhooks
-  if (topic !== 'conversation.admin.assigned' && topic !== 'conversation.team.assigned') {
+  // Check topic - handle assignment webhooks
+  // conversation.admin.assigned - standard assignment webhook
+  // conversation.admin.open.assigned - assignment of an open conversation
+  // conversation.team.assigned - team assignment (we check if admin also assigned)
+  const isAssignmentWebhook = topic === 'conversation.admin.assigned' || 
+                              topic === 'conversation.admin.open.assigned' ||
+                              topic === 'conversation.team.assigned';
+  
+  if (!isAssignmentWebhook) {
     console.log(JSON.stringify({ ...logEntry, decision: 'ignored', reason: 'wrong_topic' }));
     return;
   }
@@ -288,9 +304,54 @@ export async function handleWebhook(payload) {
   
   // Fallback: if extraction failed but we have a conversationId, try fetching from API
   if (!assignmentInfo) {
-    // Try to get conversationId from payload for fallback fetch
+    // Log full payload structure for debugging workflow assignments
     const item = payload.data?.item || payload.item || payload.data;
     const conversationId = item?.id || item?.conversation_id || payload.conversation_id || payload.data?.id;
+    
+    // Log payload structure for debugging (sanitized to avoid logging sensitive data)
+    const payloadDebug = {
+      requestId,
+      webhookId,
+      topic,
+      hasData: !!payload.data,
+      hasItem: !!payload.item,
+      dataKeys: payload.data ? Object.keys(payload.data) : null,
+      itemKeys: item ? Object.keys(item) : null,
+      // Log assignment-related fields specifically
+      adminAssigneeId: item?.admin_assignee_id || payload.data?.admin_assignee_id || null,
+      adminAssignee: item?.admin_assignee ? (typeof item.admin_assignee === 'object' ? { id: item.admin_assignee.id, type: item.admin_assignee.type } : item.admin_assignee) : null,
+      teamAssigneeId: item?.team_assignee_id || item?.team?.id || payload.data?.team_assignee_id || null,
+      conversationId: conversationId || null,
+      // Log conversation_parts structure if present
+      hasConversationParts: !!item?.conversation_parts?.conversation_parts,
+      conversationPartsCount: item?.conversation_parts?.conversation_parts?.length || 0
+    };
+    
+    // If conversation_parts exist, log assignment parts specifically
+    if (item?.conversation_parts?.conversation_parts) {
+      const assignmentParts = item.conversation_parts.conversation_parts.filter(
+        p => p.part_type === 'assignment' || p.part_type === 'default_assignment'
+      );
+      if (assignmentParts.length > 0) {
+        payloadDebug.assignmentParts = assignmentParts.map(p => ({
+          part_type: p.part_type,
+          assigned_to: p.assigned_to ? {
+            type: p.assigned_to.type,
+            id: p.assigned_to.id
+          } : null,
+          author: p.author ? {
+            type: p.author.type,
+            id: p.author.id
+          } : null
+        }));
+      }
+    }
+    
+    console.log(JSON.stringify({
+      ...payloadDebug,
+      decision: 'extraction_failed_debug',
+      reason: 'logging_full_payload_structure'
+    }));
     
       if (conversationId) {
       console.log(`[${requestId}] Extraction failed, attempting fallback fetch for conversation ${conversationId}`);
@@ -305,14 +366,16 @@ export async function handleWebhook(payload) {
         const lastAssignmentAt = conversation.statistics?.last_assignment_at || conversation.last_assignment_at;
         
         // Also check conversation_parts if assigneeId not found in top-level fields
+        // Check in REVERSE order (most recent first) to catch latest assignments
         if (!assigneeId && conversation.conversation_parts?.conversation_parts) {
-          for (const part of conversation.conversation_parts.conversation_parts) {
+          const parts = [...conversation.conversation_parts.conversation_parts].reverse();
+          for (const part of parts) {
             if (part.part_type === 'assignment' || part.part_type === 'default_assignment') {
               if (part.assigned_to?.type === 'admin' && part.assigned_to.id) {
                 assigneeId = String(part.assigned_to.id);
                 if (part.assigned_to.email) assigneeEmail = part.assigned_to.email;
                 if (part.assigned_to.name) assigneeName = part.assigned_to.name;
-                break; // Found it, stop looking
+                break; // Found it, stop looking (most recent assignment wins)
               }
             }
           }
@@ -359,9 +422,9 @@ export async function handleWebhook(payload) {
       }
     }
     
-    if (!assignmentInfo) {
-      console.log(JSON.stringify({ ...logEntry, decision: 'ignored', reason: 'extraction_failed' }));
-      return;
+  if (!assignmentInfo) {
+    console.log(JSON.stringify({ ...logEntry, decision: 'ignored', reason: 'extraction_failed' }));
+    return;
     }
   }
 
@@ -472,15 +535,35 @@ export async function handleWebhook(payload) {
   }
 
   // Noise control: Skip if conversation not open
+  // BUT: Process if assignment was very recent (within last 5 minutes) even if closed
+  // This handles workflow assignments that immediately close conversations
+  const assignmentAgeMinutes = lastAssignmentAt ? 
+    (Date.now() / 1000 - lastAssignmentAt) / 60 : null;
+  const isRecentAssignment = assignmentAgeMinutes !== null && assignmentAgeMinutes <= 5;
+  
   if (conversation.state !== 'open') {
-    console.log(JSON.stringify({ 
-      ...logEntry, 
-      decision: 'ignored', 
-      reason: 'conversation_not_open',
-      state: conversation.state
-    }));
-    markWebhookProcessed(webhookId, { conversationId, assigneeEmail });
-    return;
+    if (isRecentAssignment) {
+      // Recent assignment but conversation is closed - still process it
+      console.log(JSON.stringify({ 
+        ...logEntry, 
+        decision: 'processing_despite_closed',
+        reason: 'recent_assignment',
+        state: conversation.state,
+        assignmentAgeMinutes: assignmentAgeMinutes.toFixed(2)
+      }));
+      // Continue processing below
+    } else {
+      // Old assignment or no timestamp - skip it
+      console.log(JSON.stringify({ 
+        ...logEntry, 
+        decision: 'ignored', 
+        reason: 'conversation_not_open',
+        state: conversation.state,
+        assignmentAgeMinutes: assignmentAgeMinutes ? assignmentAgeMinutes.toFixed(2) : null
+      }));
+      markWebhookProcessed(webhookId, { conversationId, assigneeEmail });
+      return;
+    }
   }
 
   // Fin involvement check
