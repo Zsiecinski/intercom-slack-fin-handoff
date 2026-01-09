@@ -140,7 +140,48 @@ Health check endpoint with stats.
     "optedIn": 8,
     "optedOut": 2,
     "defaultOptIn": true
+  },
+  "messages": {
+    "total": 42,
+    "hours": 24,
+    "breakdown": [
+      { "hour": "2024-01-01T00:00:00.000Z", "count": 5 }
+    ]
   }
+}
+```
+
+### GET /preferences
+List all user preferences (opt-in/opt-out status).
+
+**Response:**
+```json
+{
+  "stats": {
+    "total": 10,
+    "optedIn": 8,
+    "optedOut": 2,
+    "defaultOptIn": true
+  },
+  "optedIn": [
+    {
+      "email": "user@example.com",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "optedOut": [
+    {
+      "email": "user2@example.com",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "all": [
+    {
+      "email": "user@example.com",
+      "optedIn": true,
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
 }
 ```
 
@@ -233,6 +274,15 @@ npm run test-webhook team-only
 
 # Conversation parts format
 npm run test-webhook conversation-parts
+```
+
+#### 3. Check User Preferences
+```bash
+# Show all preferences
+npm run test-preferences
+
+# Check specific user
+npm run test-preferences user@example.com
 ```
 
 #### 3. Expose with ngrok (for real Intercom webhooks)

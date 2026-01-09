@@ -13,6 +13,7 @@ import {
 } from './dedupe.js';
 import { scheduleNudge } from './nudge.js';
 import { isOptedIn } from './preferences.js';
+import { recordMessageSent } from './stats.js';
 
 const FIN_GATE_MODE = process.env.FIN_GATE_MODE || 'required'; // required | log_only
 const FALLBACK_CHANNEL = process.env.FALLBACK_CHANNEL;
@@ -525,6 +526,9 @@ export async function handleWebhook(payload) {
   if (result.success) {
     logEntry.decision = 'sent';
     logEntry.usedFallback = result.usedFallback;
+    
+    // Record stats
+    recordMessageSent();
     
     // Mark as processed
     markWebhookProcessed(webhookId, { conversationId, assigneeEmail });

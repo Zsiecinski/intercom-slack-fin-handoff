@@ -11,7 +11,8 @@
     "test": "node src/test-tokens.js",
     "test-extraction": "node src/test-webhook-extraction.js",
     "test-webhook": "node src/test-webhook-manual.js",
-    "test-conversation": "node src/test-conversation.js"
+    "test-conversation": "node src/test-conversation.js",
+    "test-preferences": "node src/test-preferences.js"
   },
   "keywords": [
     "intercom",

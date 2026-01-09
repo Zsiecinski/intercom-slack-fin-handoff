@@ -5,7 +5,8 @@ import { handleWebhook } from './webhook-handler.js';
 import { getStats as getDedupeStats } from './dedupe.js';
 import { getNudgeStats } from './nudge.js';
 import { handleSlashCommand, handleInteractiveAction } from './slack-commands.js';
-import { getStats as getPreferenceStats } from './preferences.js';
+import { getStats as getPreferenceStats, getAllPreferences } from './preferences.js';
+import { getMessageStats } from './stats.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,13 +28,42 @@ app.get('/health', (req, res) => {
   const dedupeStats = getDedupeStats();
   const nudgeStats = getNudgeStats();
   const preferenceStats = getPreferenceStats();
+  const messageStats = getMessageStats(24); // Last 24 hours
   
   res.status(200).json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     dedupe: dedupeStats,
     nudge: nudgeStats,
-    preferences: preferenceStats
+    preferences: preferenceStats,
+    messages: messageStats
+  });
+});
+
+// Preferences endpoint - list all user preferences
+app.get('/preferences', (req, res) => {
+  const allPrefs = getAllPreferences();
+  const stats = getPreferenceStats();
+  
+  // Separate opted in and opted out
+  const optedIn = allPrefs.filter(p => p.optedIn);
+  const optedOut = allPrefs.filter(p => !p.optedIn);
+  
+  res.status(200).json({
+    stats,
+    optedIn: optedIn.map(p => ({
+      email: p.email,
+      updatedAt: new Date(p.updatedAt).toISOString()
+    })),
+    optedOut: optedOut.map(p => ({
+      email: p.email,
+      updatedAt: new Date(p.updatedAt).toISOString()
+    })),
+    all: allPrefs.map(p => ({
+      email: p.email,
+      optedIn: p.optedIn,
+      updatedAt: new Date(p.updatedAt).toISOString()
+    }))
   });
 });
 
