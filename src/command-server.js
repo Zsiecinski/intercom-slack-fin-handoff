@@ -7,6 +7,7 @@ import 'dotenv/config';
 import express from 'express';
 import { handleSlashCommand, handleInteractiveAction } from './slack-commands.js';
 import { getStats as getPreferenceStats, getAllPreferences } from './preferences.js';
+import { getSLAStats } from './sla-monitor.js';
 
 const app = express();
 const PORT = process.env.COMMAND_SERVER_PORT || 3001; // Different port from polling
@@ -17,12 +18,14 @@ app.use(express.urlencoded({ extended: true }));
 // Health check endpoint
 app.get('/health', (req, res) => {
   const preferenceStats = getPreferenceStats();
+  const slaStats = getSLAStats();
   
   res.status(200).json({ 
     status: 'ok', 
     service: 'slack-commands',
     timestamp: new Date().toISOString(),
-    preferences: preferenceStats
+    preferences: preferenceStats,
+    sla: slaStats
   });
 });
 

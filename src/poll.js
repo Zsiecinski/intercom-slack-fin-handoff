@@ -4,11 +4,12 @@
  */
 
 import 'dotenv/config';
-import { searchTickets, getAdmin } from './tickets.js';
+import { searchTickets, getAdmin, getTicket } from './tickets.js';
 import { getLastCheckTime, updateLastCheckTime, initializeState } from './state.js';
 import { sendTicketAssignmentDM, getTicketLink } from './ticket-notifier.js';
 import { isOptedIn } from './preferences.js';
 import { isBusinessHours, getBusinessHoursConfig, getNextBusinessHoursStart } from './business-hours.js';
+import { checkSLAStatus } from './sla-monitor.js';
 
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL || '120000', 10); // Default 2 minutes
 const INTERCOM_ACCESS_TOKEN = process.env.INTERCOM_ACCESS_TOKEN || process.env.INTERCOM_TOKEN;
@@ -164,10 +165,44 @@ async function poll() {
 
     // Process each ticket
     let notificationsSent = 0;
+    let slaAlertsSent = 0;
+    
     for (const ticket of tickets) {
+      // Process assignment notification
       const sent = await processTicket(ticket, lastCheckTime);
       if (sent) {
         notificationsSent++;
+      }
+
+      // Check SLA status
+      // Note: SLA info might be in linked conversation, so we fetch full ticket details
+      // to get complete information including linked_objects
+      if (ticket.id) {
+        try {
+          const fullTicket = await getTicket(ticket.id);
+          // Merge admin_assignee info if we have it
+          if (ticket.admin_assignee) {
+            fullTicket.admin_assignee = ticket.admin_assignee;
+          }
+          
+          const slaAlerted = await checkSLAStatus(fullTicket);
+          if (slaAlerted) {
+            slaAlertsSent++;
+          }
+        } catch (err) {
+          console.error(`Failed to fetch ticket ${ticket.id} for SLA check:`, err.message);
+          // Try with basic ticket info
+          const slaAlerted = await checkSLAStatus(ticket);
+          if (slaAlerted) {
+            slaAlertsSent++;
+          }
+        }
+      } else {
+        // No ticket ID, skip SLA check
+        const slaAlerted = await checkSLAStatus(ticket);
+        if (slaAlerted) {
+          slaAlertsSent++;
+        }
       }
     }
 
@@ -176,6 +211,9 @@ async function poll() {
 
     const duration = Date.now() - startTime;
     console.log(`Poll completed in ${duration}ms. Sent ${notificationsSent} notifications.`);
+    if (slaAlertsSent > 0) {
+      console.log(`⚠️  Sent ${slaAlertsSent} SLA missed alerts.`);
+    }
     console.log(`Next poll in ${CHECK_INTERVAL / 1000} seconds`);
 
     // Clear processed assignments set (keep it small)

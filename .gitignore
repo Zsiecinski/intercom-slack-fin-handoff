@@ -38,3 +38,6 @@ state.json
 # Preferences file
 preferences.json
 
+# SLA state file
+sla-state.json
+

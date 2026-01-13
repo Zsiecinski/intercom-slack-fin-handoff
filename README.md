@@ -87,6 +87,7 @@ src/
 | `BUSINESS_HOURS_END` | Business hours end time (HH:MM) | No | 17:00 |
 | `BUSINESS_HOURS_TIMEZONE` | Timezone for business hours | No | America/New_York |
 | `BUSINESS_HOURS_DAYS` | Business days (0-6, comma-separated) | No | 1,2,3,4,5 (Mon-Fri) |
+| `SLA_ALERT_CHANNEL` | Slack channel for SLA missed alerts | No | - |
 
 ### CHECK_INTERVAL Recommendations
 
@@ -140,9 +141,12 @@ BUSINESS_HOURS_ENABLED=false
    - Searches Intercom Tickets API for tickets created after last check
    - Processes each ticket to find admin assignments
    - Sends Slack DM to assigned admin
+   - Checks SLA status for each ticket
+   - Sends SLA missed alerts to configured channel if SLA status is "missed"
    - Updates `state.json` with new timestamp
 3. **Deduplication**: Tracks processed assignments within each polling cycle
-4. **Error Handling**: Continues polling even if individual tickets fail
+4. **SLA Monitoring**: Tracks SLA status changes and notifies when SLAs are missed
+5. **Error Handling**: Continues polling even if individual tickets fail
 
 ## API Endpoints Used
 
@@ -165,8 +169,9 @@ BUSINESS_HOURS_ENABLED=false
 
 ## State Management
 
-The service stores its state in `state.json`:
+The service stores its state in two files:
 
+**`state.json`** - Polling state:
 ```json
 {
   "lastCheckTime": 1704067200,
@@ -174,19 +179,39 @@ The service stores its state in `state.json`:
 }
 ```
 
+**`sla-state.json`** - SLA monitoring state (if SLA_ALERT_CHANNEL is configured):
+```json
+{
+  "ticket_id_123": {
+    "sla_status": "missed",
+    "sla_name": "First Response SLA",
+    "notifiedAt": 1704067200000,
+    "updatedAt": 1704067200000
+  }
+}
+```
+
 - `lastCheckTime`: Unix timestamp (seconds) of last successful poll
 - `updatedAt`: ISO timestamp for debugging
+- SLA state tracks which tickets have been notified about missed SLAs
 
-**Note**: `state.json` is gitignored and created automatically on first run.
+**Note**: Both files are gitignored and created automatically on first run.
 
 ## Slack Notification Format
 
-Notifications include:
+**Assignment Notifications** (DM to assignee):
 - **Header**: "🎫 New Ticket Assigned"
 - **Fields**: Assignee name, Ticket ID, State, Created time
 - **Subject**: Ticket subject/name
 - **Description**: Ticket description (truncated to 500 chars)
 - **Button**: "Open in Intercom" link
+
+**SLA Missed Alerts** (Channel notification, if `SLA_ALERT_CHANNEL` configured):
+- **Header**: "⚠️ SLA Missed"
+- **Fields**: SLA Name, Ticket ID, Assignee, Status
+- **Subject**: Ticket subject/name
+- **Created time**: When ticket was created
+- **Button**: "Open in Intercom" link (red/danger style)
 
 ## Rate Limiting
 
