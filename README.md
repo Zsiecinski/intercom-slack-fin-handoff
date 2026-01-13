@@ -265,6 +265,69 @@ Next poll in 120 seconds
 - Increase `CHECK_INTERVAL` to poll less frequently
 - Check logs for unnecessary API calls
 
+## SLA Monitoring Dashboard
+
+The system includes a real-time SLA monitoring dashboard for visibility into SLA performance.
+
+### Starting the Dashboard
+
+```bash
+npm run start:dashboard
+```
+
+The dashboard will be available at `http://localhost:3002` (or the port specified in `DASHBOARD_PORT`).
+
+### Dashboard Features
+
+- **Real-time Countdown Timers**: Color-coded timers showing remaining time until SLA deadline
+  - 🔴 Red: Overdue
+  - 🟠 Orange: Less than 5 minutes remaining
+  - ⚪ Grey: More than 5 minutes remaining
+
+- **Statistics Cards**: Overview of SLA status
+  - Critical (< 5 min remaining)
+  - Overdue
+  - Active
+  - Missed
+  - Hit
+  - Total Tracked
+
+- **Filtering & Sorting**:
+  - Filter by SLA status (active, missed, hit)
+  - Filter by SLA name
+  - Sort by "Next SLA Target" (deadline) or "Remaining Time"
+
+- **Auto-refresh**: Automatically updates every 5 seconds
+
+### API Endpoints
+
+- `GET /api/sla/tickets` - Get all tracked SLA tickets
+  - Query params: `status`, `sla_name`, `sort`
+- `GET /api/sla/stats` - Get SLA statistics
+- `GET /api/health` - Health check with SLA stats
+
+### Enhanced SLA Monitoring
+
+The enhanced SLA monitoring system:
+
+1. **Calculates Deadlines**: Uses `assigned_at + sla_duration` (not `created_at`)
+2. **Office Hours Support**: Accounts for business hours in deadline calculations
+3. **Pausing**: Automatically pauses SLA tracking for:
+   - Snoozed tickets (`snoozed_until`)
+   - Tickets in "waiting on customer" state
+4. **Dual Monitoring**:
+   - **Proactive**: Alerts when active SLAs pass their calculated deadline
+   - **Status-based**: Alerts when Intercom marks SLA as "missed"
+5. **Deduplication**: Prevents duplicate alerts for the same violation
+
+### SLA Duration Detection
+
+The system automatically detects SLA duration based on SLA name:
+- "First Response" / "FRT": 30 minutes
+- "Next Response" / "NRT": 2 hours
+- "Close" / "TTC": 24 hours
+- Default: 30 minutes if unknown
+
 ## Production Deployment
 
 ### VPS Deployment (Hostinger, DigitalOcean, etc.)

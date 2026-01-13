@@ -7,7 +7,7 @@ import 'dotenv/config';
 import express from 'express';
 import { handleSlashCommand, handleInteractiveAction } from './slack-commands.js';
 import { getStats as getPreferenceStats, getAllPreferences } from './preferences.js';
-import { getSLAStats } from './sla-monitor.js';
+import { getSLAStats } from './sla-monitor-enhanced.js';
 
 const app = express();
 const PORT = process.env.COMMAND_SERVER_PORT || 3001; // Different port from polling

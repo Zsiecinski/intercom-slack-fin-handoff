@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/poll.js",
     "start:commands": "node src/command-server.js",
+    "start:dashboard": "node src/dashboard-server.js",
     "start:all": "concurrently \"npm run start\" \"npm run start:commands\"",
     "dev": "node --watch src/poll.js",
     "poll": "node src/poll.js",
