@@ -3,6 +3,9 @@
  * Tracks assignment times, calculates deadlines, and monitors both proactive and status-based violations
  */
 
+// Ensure dotenv is loaded first
+import 'dotenv/config';
+
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -472,7 +475,7 @@ export function getSLAStats() {
   
   return {
     enabled: !!SLA_CHANNEL,
-    channel: SLA_CHANNEL || null,
+    channel: SLA_CHANNEL || null, // Keep as null (not string "null")
     total_tracked: tickets.length,
     active,
     missed,
