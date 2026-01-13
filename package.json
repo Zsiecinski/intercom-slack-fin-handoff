@@ -6,6 +6,8 @@
   "main": "src/poll.js",
   "scripts": {
     "start": "node src/poll.js",
+    "start:commands": "node src/command-server.js",
+    "start:all": "concurrently \"npm run start\" \"npm run start:commands\"",
     "dev": "node --watch src/poll.js",
     "poll": "node src/poll.js",
     "test": "node src/test-poll.js",
@@ -21,7 +23,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
   },
   "devDependencies": {
     "@types/node": "^20.10.0"

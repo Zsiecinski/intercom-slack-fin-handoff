@@ -106,7 +106,7 @@ export async function handleSlashCommand(req, res) {
       case 'opt-in':
       case 'on':
       case 'enable':
-        optIn(userEmail);
+        await optIn(userEmail);
         response = {
           response_type: 'ephemeral',
           blocks: [
@@ -220,7 +220,7 @@ export async function handleInteractiveAction(payload) {
   }
 
   if (actionItem.action_id === 'opt_out') {
-    optOut(userEmail);
+    await optOut(userEmail);
     return {
       response_type: 'ephemeral',
       blocks: [

@@ -71,7 +71,10 @@ FALLBACK_CHANNEL=#your-fallback-channel-id-or-name
 EMAIL_DOMAIN=staytuned.digital
 
 # Polling Configuration (optional)
-CHECK_INTERVAL=120000  # milliseconds (default: 120000 = 2 minutes)
+CHECK_INTERVAL=120000
+
+# Command Server Configuration (optional)
+COMMAND_SERVER_PORT=3001  # Port for Slack commands server  # milliseconds (default: 120000 = 2 minutes)
 ```
 
 Save and exit (Ctrl+X, then Y, then Enter)
@@ -97,9 +100,21 @@ PM2 will keep your service running and restart it if it crashes.
 sudo npm install -g pm2
 ```
 
-### Start the service with PM2:
+### Start both services with PM2:
+
+**Option 1: Start both services separately (Recommended)**
 ```bash
+# Start polling service
 pm2 start src/poll.js --name intercom-ticket-poller
+
+# Start command server (for Slack opt-in/opt-out)
+pm2 start src/command-server.js --name intercom-commands
+```
+
+**Option 2: Use the start script**
+```bash
+chmod +x start-both.sh
+./start-both.sh
 ```
 
 ### Save PM2 configuration:
@@ -113,6 +128,11 @@ pm2 startup
 # Follow the instructions it outputs (usually involves running a sudo command)
 ```
 
+### Note on Ports:
+- Polling service: No port needed (background worker)
+- Command server: Runs on port 3001 (or COMMAND_SERVER_PORT env var)
+- Make sure port 3001 is accessible if you want Slack commands to work
+
 ## Step 7: Monitor the Service
 
 ### Check status:
@@ -122,19 +142,41 @@ pm2 status
 
 ### View logs:
 ```bash
+# View polling service logs
 pm2 logs intercom-ticket-poller
-# or follow logs in real-time
+
+# View command server logs
+pm2 logs intercom-commands
+
+# View all logs
+pm2 logs
+
+# Follow logs in real-time
 pm2 logs intercom-ticket-poller --lines 50
 ```
 
-### Restart the service:
+### Restart services:
 ```bash
+# Restart polling service
 pm2 restart intercom-ticket-poller
+
+# Restart command server
+pm2 restart intercom-commands
+
+# Restart both
+pm2 restart all
 ```
 
-### Stop the service:
+### Stop services:
 ```bash
+# Stop polling service
 pm2 stop intercom-ticket-poller
+
+# Stop command server
+pm2 stop intercom-commands
+
+# Stop both
+pm2 stop all
 ```
 
 ## Step 8: Set Up Log Rotation (Optional but Recommended)

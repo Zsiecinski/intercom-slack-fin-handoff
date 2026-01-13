@@ -48,9 +48,27 @@ src/
    CHECK_INTERVAL=120000  # milliseconds (default: 120000 = 2 minutes)
    ```
 
-3. **Start the polling service:**
+3. **Start the services:**
+   
+   **For polling only:**
    ```bash
    npm start
+   ```
+   
+   **For polling + Slack commands (opt-in/opt-out):**
+   ```bash
+   # Terminal 1: Start polling service
+   npm start
+   
+   # Terminal 2: Start command server
+   npm run start:commands
+   ```
+   
+   **Or use PM2 (recommended for production):**
+   ```bash
+   pm2 start src/poll.js --name intercom-ticket-poller
+   pm2 start src/command-server.js --name intercom-commands
+   pm2 save
    ```
 
 ## Configuration
