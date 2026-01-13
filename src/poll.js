@@ -8,6 +8,7 @@ import { searchTickets, getAdmin } from './tickets.js';
 import { getLastCheckTime, updateLastCheckTime, initializeState } from './state.js';
 import { sendTicketAssignmentDM, getTicketLink } from './ticket-notifier.js';
 import { isOptedIn } from './preferences.js';
+import { isBusinessHours, getBusinessHoursConfig, getNextBusinessHoursStart } from './business-hours.js';
 
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL || '120000', 10); // Default 2 minutes
 const INTERCOM_ACCESS_TOKEN = process.env.INTERCOM_ACCESS_TOKEN || process.env.INTERCOM_TOKEN;
@@ -127,6 +128,18 @@ async function poll() {
 
   console.log(`\n[${new Date().toISOString()}] Starting poll...`);
 
+  // Check if we're in business hours
+  if (!isBusinessHours()) {
+    const config = getBusinessHoursConfig();
+    const nextStart = getNextBusinessHoursStart();
+    const waitMinutes = Math.ceil((nextStart - Date.now()) / 1000 / 60);
+    
+    console.log(`⏰ Outside business hours (${config.startTime}-${config.endTime} ${config.timezone})`);
+    console.log(`   Business days: ${config.businessDaysNames.join(', ')}`);
+    console.log(`   Next poll at: ${nextStart.toISOString()} (in ~${waitMinutes} minutes)`);
+    return; // Skip polling outside business hours
+  }
+
   try {
     // Initialize state if needed
     await initializeState();
@@ -192,8 +205,17 @@ async function startPolling() {
   console.log('Starting Intercom Tickets polling service...');
   console.log(`Check interval: ${CHECK_INTERVAL / 1000} seconds`);
   console.log(`Intercom API version: 2.11+`);
+  
+  // Display business hours configuration
+  const bhConfig = getBusinessHoursConfig();
+  if (bhConfig.enabled) {
+    console.log(`Business hours: ${bhConfig.startTime}-${bhConfig.endTime} ${bhConfig.timezone}`);
+    console.log(`Business days: ${bhConfig.businessDaysNames.join(', ')}`);
+  } else {
+    console.log(`Business hours: Disabled (polling 24/7)`);
+  }
 
-  // Run initial poll immediately
+  // Run initial poll immediately (will check business hours inside)
   await poll();
 
   // Set up interval for subsequent polls

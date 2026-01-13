@@ -82,12 +82,55 @@ src/
 | `FALLBACK_CHANNEL` | Slack channel for fallback posts | No | - |
 | `EMAIL_DOMAIN` | Domain for email mapping | No | staytuned.digital |
 | `CHECK_INTERVAL` | Polling interval in milliseconds | No | 120000 (2 min) |
+| `BUSINESS_HOURS_ENABLED` | Enable business hours restriction | No | true |
+| `BUSINESS_HOURS_START` | Business hours start time (HH:MM) | No | 09:00 |
+| `BUSINESS_HOURS_END` | Business hours end time (HH:MM) | No | 17:00 |
+| `BUSINESS_HOURS_TIMEZONE` | Timezone for business hours | No | America/New_York |
+| `BUSINESS_HOURS_DAYS` | Business days (0-6, comma-separated) | No | 1,2,3,4,5 (Mon-Fri) |
 
 ### CHECK_INTERVAL Recommendations
 
 - **Minimum**: 60000ms (1 minute) - More frequent checks, higher API usage
 - **Recommended**: 120000ms (2 minutes) - Good balance
 - **Maximum**: 300000ms (5 minutes) - Less frequent, may miss rapid assignments
+
+### Business Hours Configuration
+
+By default, polling only runs during business hours to save API calls and avoid off-hours notifications.
+
+**Example `.env` configuration:**
+```bash
+# Enable business hours (default: enabled)
+BUSINESS_HOURS_ENABLED=true
+
+# Business hours: 9 AM - 5 PM Eastern Time
+BUSINESS_HOURS_START=09:00
+BUSINESS_HOURS_END=17:00
+BUSINESS_HOURS_TIMEZONE=America/New_York
+
+# Business days: Monday-Friday (1=Monday, 2=Tuesday, ..., 5=Friday)
+BUSINESS_HOURS_DAYS=1,2,3,4,5
+
+# To disable business hours and poll 24/7:
+BUSINESS_HOURS_ENABLED=false
+```
+
+**Day numbers:**
+- `0` = Sunday
+- `1` = Monday
+- `2` = Tuesday
+- `3` = Wednesday
+- `4` = Thursday
+- `5` = Friday
+- `6` = Saturday
+
+**Common timezones:**
+- `America/New_York` (Eastern)
+- `America/Chicago` (Central)
+- `America/Denver` (Mountain)
+- `America/Los_Angeles` (Pacific)
+- `Europe/London` (UK)
+- `UTC` (Coordinated Universal Time)
 
 ## How It Works
 
