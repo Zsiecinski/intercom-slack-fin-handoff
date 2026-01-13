@@ -45,7 +45,11 @@ src/
    EMAIL_DOMAIN=staytuned.digital
    
    # Polling Configuration (optional)
-   CHECK_INTERVAL=120000  # milliseconds (default: 120000 = 2 minutes)
+   CHECK_INTERVAL=30000  # milliseconds (default: 30000 = 30 seconds for 5-min SLAs)
+   
+   # SLA Duration Configuration (optional)
+   # Format: "FRT:300,NRT:300,TTC:86400" (values in seconds)
+   SLA_DURATIONS=FRT:300,NRT:300,TTC:86400
    ```
 
 3. **Start the services:**
@@ -81,7 +85,8 @@ src/
 | `SLACK_BOT_TOKEN` | Slack bot token (xoxb-...) | Yes | - |
 | `FALLBACK_CHANNEL` | Slack channel for fallback posts | No | - |
 | `EMAIL_DOMAIN` | Domain for email mapping | No | staytuned.digital |
-| `CHECK_INTERVAL` | Polling interval in milliseconds | No | 120000 (2 min) |
+| `CHECK_INTERVAL` | Polling interval in milliseconds | No | 30000 (30 sec) |
+| `SLA_DURATIONS` | Custom SLA durations (format: "FRT:300,NRT:300,TTC:86400") | No | FRT:300, NRT:300, TTC:86400 |
 | `BUSINESS_HOURS_ENABLED` | Enable business hours restriction | No | true |
 | `BUSINESS_HOURS_START` | Business hours start time (HH:MM) | No | 09:00 |
 | `BUSINESS_HOURS_END` | Business hours end time (HH:MM) | No | 17:00 |
@@ -216,9 +221,10 @@ The service stores its state in two files:
 ## Rate Limiting
 
 Intercom API allows **10,000 calls per minute**. With default settings:
-- Poll every 2 minutes = 30 polls/hour
-- Each poll makes ~1-3 API calls (search + admin lookups)
-- **Well within limits** even at 1-minute intervals
+- Poll every 30 seconds = 120 polls/hour
+- Each poll makes ~1-3 API calls (search + admin lookups + ticket details for SLA)
+- **Well within limits** - approximately 240-360 API calls/hour
+- For 5-minute SLAs, frequent polling (30 seconds) is necessary to catch violations
 
 ## Error Handling
 

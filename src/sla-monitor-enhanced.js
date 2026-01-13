@@ -146,23 +146,43 @@ function getAssignmentTimestamp(ticket) {
 function getSLADuration(slaApplied) {
   // SLA duration is typically stored in sla_events or calculated from SLA rules
   // For now, we'll need to get this from the SLA definition
-  // Default to common SLA durations if not available
-  // First Response Time: typically 30 minutes = 1800 seconds
-  // Next Response Time: typically 2 hours = 7200 seconds
-  // Time to Close: typically 24 hours = 86400 seconds
+  // Custom durations can be configured via environment variable SLA_DURATIONS
+  // Format: "FRT:300,NRT:300,TTC:86400" (in seconds)
   
+  // Check for custom durations from environment
+  const customDurations = process.env.SLA_DURATIONS;
+  if (customDurations) {
+    const durations = {};
+    customDurations.split(',').forEach(item => {
+      const [key, value] = item.split(':');
+      if (key && value) {
+        durations[key.trim().toUpperCase()] = parseInt(value.trim(), 10);
+      }
+    });
+    
+    const slaName = slaApplied.sla_name?.toUpperCase() || '';
+    if (slaName.includes('FIRST RESPONSE') || slaName.includes('FRT')) {
+      return durations.FRT || 5 * 60; // Default 5 minutes
+    } else if (slaName.includes('NEXT RESPONSE') || slaName.includes('NRT')) {
+      return durations.NRT || 5 * 60; // Default 5 minutes
+    } else if (slaName.includes('CLOSE') || slaName.includes('TTC')) {
+      return durations.TTC || 24 * 60 * 60; // Default 24 hours
+    }
+  }
+  
+  // Default durations (customize these for your SLAs)
   const slaName = slaApplied.sla_name?.toLowerCase() || '';
   
   if (slaName.includes('first response') || slaName.includes('frt')) {
-    return 30 * 60; // 30 minutes
+    return 5 * 60; // 5 minutes
   } else if (slaName.includes('next response') || slaName.includes('nrt')) {
-    return 2 * 60 * 60; // 2 hours
+    return 5 * 60; // 5 minutes
   } else if (slaName.includes('close') || slaName.includes('ttc')) {
     return 24 * 60 * 60; // 24 hours
   }
   
-  // Default to 30 minutes if unknown
-  return 30 * 60;
+  // Default to 5 minutes if unknown (conservative for short SLAs)
+  return 5 * 60;
 }
 
 /**

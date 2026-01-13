@@ -11,7 +11,9 @@ import { isOptedIn } from './preferences.js';
 import { isBusinessHours, getBusinessHoursConfig, getNextBusinessHoursStart } from './business-hours.js';
 import { checkSLAStatus } from './sla-monitor-enhanced.js';
 
-const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL || '120000', 10); // Default 2 minutes
+// Default to 30 seconds for short SLAs (5 minutes)
+// This ensures we catch violations before they occur
+const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL || '30000', 10); // Default 30 seconds
 const INTERCOM_ACCESS_TOKEN = process.env.INTERCOM_ACCESS_TOKEN || process.env.INTERCOM_TOKEN;
 
 // Track processed assignments to avoid duplicates within a polling cycle
