@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SLA Monitoring Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #334155;
+        }
+
+        h1 {
+            font-size: 28px;
+            color: #60a5fa;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card.critical .stat-value { color: #f87171; }
+        .stat-card.overdue .stat-value { color: #ef4444; }
+        .stat-card.active .stat-value { color: #60a5fa; }
+        .stat-card.missed .stat-value { color: #fbbf24; }
+        .stat-card.hit .stat-value { color: #34d399; }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        select, input {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+
+        .table-container {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #0f172a;
+            border-bottom: 2px solid #334155;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #94a3b8;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #334155;
+        }
+
+        tbody tr:hover {
+            background: #334155;
+        }
+
+        .ticket-id {
+            font-family: 'Courier New', monospace;
+            color: #60a5fa;
+        }
+
+        .countdown {
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        .countdown.overdue {
+            color: #ef4444;
+        }
+
+        .countdown.critical {
+            color: #f87171;
+        }
+
+        .countdown.warning {
+            color: #fbbf24;
+        }
+
+        .countdown.normal {
+            color: #94a3b8;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active { background: #1e3a8a; color: #60a5fa; }
+        .status-missed { background: #78350f; color: #fbbf24; }
+        .status-hit { background: #064e3b; color: #34d399; }
+        .status-paused { background: #475569; color: #cbd5e1; }
+
+        .refresh-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #2563eb;
+        }
+
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .auto-refresh input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚨 SLA Monitoring Dashboard</h1>
+        <div class="auto-refresh">
+            <label>
+                <input type="checkbox" id="autoRefresh" checked>
+                Auto-refresh (5s)
+            </label>
+            <button class="refresh-btn" onclick="loadData()">Refresh</button>
+        </div>
+    </div>
+
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card critical">
+            <div class="stat-value" id="statCritical">-</div>
+            <div class="stat-label">Critical (&lt;5min)</div>
+        </div>
+        <div class="stat-card overdue">
+            <div class="stat-value" id="statOverdue">-</div>
+            <div class="stat-label">Overdue</div>
+        </div>
+        <div class="stat-card active">
+            <div class="stat-value" id="statActive">-</div>
+            <div class="stat-label">Active</div>
+        </div>
+        <div class="stat-card missed">
+            <div class="stat-value" id="statMissed">-</div>
+            <div class="stat-label">Missed</div>
+        </div>
+        <div class="stat-card hit">
+            <div class="stat-value" id="statHit">-</div>
+            <div class="stat-label">Hit</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="statTotal">-</div>
+            <div class="stat-label">Total Tracked</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Status:</label>
+            <select id="filterStatus" onchange="loadData()">
+                <option value="">All</option>
+                <option value="active">Active</option>
+                <option value="missed">Missed</option>
+                <option value="hit">Hit</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>SLA Name:</label>
+            <input type="text" id="filterSlaName" placeholder="Filter by SLA name" onchange="loadData()">
+        </div>
+        <div class="control-group">
+            <label>Sort by:</label>
+            <select id="sortBy" onchange="loadData()">
+                <option value="deadline">Next SLA Target</option>
+                <option value="remaining">Remaining Time</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Ticket ID</th>
+                    <th>SLA Name</th>
+                    <th>Status</th>
+                    <th>Assignee</th>
+                    <th>Assigned At</th>
+                    <th>Deadline</th>
+                    <th>Remaining</th>
+                    <th>Alerts</th>
+                </tr>
+            </thead>
+            <tbody id="ticketsTableBody">
+                <tr>
+                    <td colspan="8" class="loading">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let refreshInterval = null;
+
+        function formatTime(seconds) {
+            if (seconds === null || seconds === undefined) return 'N/A';
+            
+            const isNegative = seconds < 0;
+            const absSeconds = Math.abs(seconds);
+            
+            const days = Math.floor(absSeconds / 86400);
+            const hours = Math.floor((absSeconds % 86400) / 3600);
+            const minutes = Math.floor((absSeconds % 3600) / 60);
+            const secs = absSeconds % 60;
+            
+            let result = '';
+            if (days > 0) result += `${days}d `;
+            if (hours > 0) result += `${hours}h `;
+            if (minutes > 0) result += `${minutes}m `;
+            if (secs > 0 || result === '') result += `${secs}s`;
+            
+            return (isNegative ? '-' : '') + result.trim();
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return 'N/A';
+            return new Date(timestamp * 1000).toLocaleString();
+        }
+
+        function getCountdownClass(remainingSeconds, isOverdue) {
+            if (isOverdue) return 'overdue';
+            if (remainingSeconds === null) return 'normal';
+            const minutes = Math.floor(remainingSeconds / 60);
+            if (minutes < 5) return 'critical';
+            if (minutes < 15) return 'warning';
+            return 'normal';
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/sla/stats');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const stats = data.stats;
+                    document.getElementById('statCritical').textContent = stats.critical || 0;
+                    document.getElementById('statOverdue').textContent = stats.overdue || 0;
+                    document.getElementById('statActive').textContent = stats.active || 0;
+                    document.getElementById('statMissed').textContent = stats.missed || 0;
+                    document.getElementById('statHit').textContent = stats.hit || 0;
+                    document.getElementById('statTotal').textContent = stats.total_tracked || 0;
+                }
+            } catch (err) {
+                console.error('Error loading stats:', err);
+            }
+        }
+
+        async function loadData() {
+            const status = document.getElementById('filterStatus').value;
+            const slaName = document.getElementById('filterSlaName').value;
+            const sortBy = document.getElementById('sortBy').value;
+            
+            const params = new URLSearchParams();
+            if (status) params.append('status', status);
+            if (slaName) params.append('sla_name', slaName);
+            if (sortBy) params.append('sort', sortBy);
+            
+            try {
+                const response = await fetch(`/api/sla/tickets?${params}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderTickets(data.tickets);
+                    loadStats();
+                }
+            } catch (err) {
+                console.error('Error loading tickets:', err);
+                document.getElementById('ticketsTableBody').innerHTML = 
+                    '<tr><td colspan="8" class="loading">Error loading data</td></tr>';
+            }
+        }
+
+        function renderTickets(tickets) {
+            const tbody = document.getElementById('ticketsTableBody');
+            
+            if (tickets.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="loading">No tickets found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = tickets.map(ticket => {
+                const remaining = formatTime(ticket.remaining_seconds);
+                const countdownClass = getCountdownClass(ticket.remaining_seconds, ticket.is_overdue);
+                
+                return `
+                    <tr>
+                        <td class="ticket-id">${ticket.ticket_id}</td>
+                        <td>${ticket.sla_name}</td>
+                        <td>
+                            <span class="status-badge status-${ticket.sla_status}">
+                                ${ticket.sla_status}
+                            </span>
+                            ${ticket.is_paused ? '<span class="status-badge status-paused">Paused</span>' : ''}
+                        </td>
+                        <td>-</td>
+                        <td>${formatDate(ticket.assigned_at)}</td>
+                        <td>${formatDate(ticket.deadline)}</td>
+                        <td>
+                            <span class="countdown ${countdownClass}">
+                                ${remaining}
+                            </span>
+                        </td>
+                        <td>${ticket.alert_count || 0}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Auto-refresh
+        document.getElementById('autoRefresh').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                refreshInterval = setInterval(loadData, 5000);
+            } else {
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+            }
+        });
+
+        // Initial load
+        loadData();
+        if (document.getElementById('autoRefresh').checked) {
+            refreshInterval = setInterval(loadData, 5000);
+        }
+    </script>
+</body>
+</html>

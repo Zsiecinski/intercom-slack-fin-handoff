@@ -9,7 +9,7 @@ import { getLastCheckTime, updateLastCheckTime, initializeState } from './state.
 import { sendTicketAssignmentDM, getTicketLink } from './ticket-notifier.js';
 import { isOptedIn } from './preferences.js';
 import { isBusinessHours, getBusinessHoursConfig, getNextBusinessHoursStart } from './business-hours.js';
-import { checkSLAStatus } from './sla-monitor.js';
+import { checkSLAStatus } from './sla-monitor-enhanced.js';
 
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL || '120000', 10); // Default 2 minutes
 const INTERCOM_ACCESS_TOKEN = process.env.INTERCOM_ACCESS_TOKEN || process.env.INTERCOM_TOKEN;
@@ -176,9 +176,9 @@ async function poll() {
         notificationsSent++;
       }
 
-      // Check SLA status
+      // Check SLA status with enhanced monitoring
       // Note: SLA info might be in linked conversation, so we fetch full ticket details
-      // to get complete information including linked_objects
+      // to get complete information including linked_objects and statistics
       if (ticket.id) {
         try {
           const fullTicket = await getTicket(ticket.id);
@@ -187,22 +187,23 @@ async function poll() {
             fullTicket.admin_assignee = ticket.admin_assignee;
           }
           
-          const slaAlerted = await checkSLAStatus(fullTicket);
-          if (slaAlerted) {
+          const slaResult = await checkSLAStatus(fullTicket);
+          if (slaResult.alerted) {
             slaAlertsSent++;
+            console.log(`⚠️  SLA ${slaResult.violationType} alert sent for ticket ${ticket.id}`);
           }
         } catch (err) {
           console.error(`Failed to fetch ticket ${ticket.id} for SLA check:`, err.message);
           // Try with basic ticket info
-          const slaAlerted = await checkSLAStatus(ticket);
-          if (slaAlerted) {
+          const slaResult = await checkSLAStatus(ticket);
+          if (slaResult.alerted) {
             slaAlertsSent++;
           }
         }
       } else {
         // No ticket ID, skip SLA check
-        const slaAlerted = await checkSLAStatus(ticket);
-        if (slaAlerted) {
+        const slaResult = await checkSLAStatus(ticket);
+        if (slaResult.alerted) {
           slaAlertsSent++;
         }
       }
