@@ -11,16 +11,29 @@ if (fs.existsSync(envPath)) {
   require('dotenv').config({ path: envPath });
 }
 
-// Read SLA_ALERT_CHANNEL directly from .env file as fallback
-let slaChannel = process.env.SLA_ALERT_CHANNEL;
-if (!slaChannel && fs.existsSync(envPath)) {
+// Read SLA_ALERT_CHANNEL directly from .env file
+let slaChannel = null;
+if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf-8');
-  const match = envContent.match(/^SLA_ALERT_CHANNEL=(.+)$/m);
-  if (match) {
-    slaChannel = match[1].trim();
-    // Remove any trailing comments
-    slaChannel = slaChannel.split('#')[0].trim();
+  // Try to find SLA_ALERT_CHANNEL in the file (handle both with and without comments)
+  const lines = envContent.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('SLA_ALERT_CHANNEL=')) {
+      slaChannel = trimmed.split('=')[1].split('#')[0].trim();
+      break;
+    }
   }
+}
+
+// Fallback to process.env if file reading didn't work
+if (!slaChannel) {
+  slaChannel = process.env.SLA_ALERT_CHANNEL;
+}
+
+// Final fallback
+if (!slaChannel) {
+  slaChannel = '#intercom-pings';
 }
 
 // Debug output (will show in PM2 logs when starting)
