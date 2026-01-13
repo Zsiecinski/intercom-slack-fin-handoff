@@ -3,7 +3,13 @@
  * Uses REST API v2.11+ for ticket search
  */
 
+// Support both INTERCOM_ACCESS_TOKEN and INTERCOM_TOKEN for backward compatibility
 const INTERCOM_ACCESS_TOKEN = process.env.INTERCOM_ACCESS_TOKEN || process.env.INTERCOM_TOKEN;
+
+// Validate token is set
+if (!INTERCOM_ACCESS_TOKEN) {
+  console.warn('⚠️  INTERCOM_ACCESS_TOKEN not set. Please set it in your .env file.');
+}
 const INTERCOM_BASE_URL = 'https://api.intercom.io';
 
 /**
