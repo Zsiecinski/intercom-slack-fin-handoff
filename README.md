@@ -181,14 +181,33 @@ Next poll in 120 seconds
 
 ## Production Deployment
 
+### VPS Deployment (Hostinger, DigitalOcean, etc.)
+
+See **[VPS_SETUP.md](./VPS_SETUP.md)** for a complete guide.
+
+**Quick setup:**
+```bash
+# On your VPS
+git clone https://github.com/Zsiecinski/intercom-slack-fin-handoff.git
+cd intercom-slack-fin-handoff
+chmod +x setup-vps.sh
+./setup-vps.sh
+# Edit .env with your credentials
+nano .env
+# Start with PM2
+pm2 start src/poll.js --name intercom-ticket-poller
+pm2 save
+pm2 startup
+```
+
 ### Running as a Service
 
-**Using PM2:**
+**Using PM2 (Recommended):**
 ```bash
 npm install -g pm2
 pm2 start src/poll.js --name intercom-ticket-poller
 pm2 save
-pm2 startup
+pm2 startup  # Follow instructions to enable auto-start
 ```
 
 **Using systemd:**
@@ -204,10 +223,18 @@ User=your-user
 WorkingDirectory=/path/to/intercom-slack-fin-handoff
 ExecStart=/usr/bin/node src/poll.js
 Restart=always
-EnvironmentFile=/path/to/.env
+RestartSec=10
+EnvironmentFile=/path/to/intercom-slack-fin-handoff/.env
 
 [Install]
 WantedBy=multi-user.target
+```
+
+Then:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable intercom-ticket-poller
+sudo systemctl start intercom-ticket-poller
 ```
 
 ### Docker
