@@ -30,7 +30,7 @@ console.log('  .env exists:', fs.existsSync(envPath));
 console.log('  SLA_ALERT_CHANNEL from dotenv:', process.env.SLA_ALERT_CHANNEL);
 console.log('  SLA_ALERT_CHANNEL final value:', slaChannel || '#intercom-pings');
 
-module.exports = {
+const config = {
   apps: [{
     name: 'sla-dashboard',
     script: 'src/dashboard-server.js',
@@ -44,3 +44,10 @@ module.exports = {
     }
   }]
 };
+
+// Debug: log the config being exported
+console.log('PM2 Ecosystem Config:');
+console.log('  App name:', config.apps[0].name);
+console.log('  SLA_ALERT_CHANNEL:', config.apps[0].env.SLA_ALERT_CHANNEL);
+
+module.exports = config;
