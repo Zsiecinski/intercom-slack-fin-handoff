@@ -156,9 +156,11 @@ async function poll() {
       console.log(`Last check time: ${new Date(lastCheckTime * 1000).toISOString()}`);
     }
 
-    // Search for tickets created after last check
+    // Search for tickets created or updated after last check
+    // This catches both new tickets and tickets with SLA status changes
     const tickets = await searchTickets(lastCheckTime, {
-      limit: 100 // Fetch up to 100 tickets per poll
+      limit: 100, // Fetch up to 100 tickets per poll
+      includeUpdated: true // Include updated_at to catch SLA status changes
     });
 
     console.log(`Found ${tickets.length} tickets to process`);

@@ -13,9 +13,10 @@ if (!INTERCOM_ACCESS_TOKEN) {
 const INTERCOM_BASE_URL = 'https://api.intercom.io';
 
 /**
- * Search for tickets created after a specific timestamp
+ * Search for tickets created or updated after a specific timestamp
  * @param {number} sinceTimestamp - Unix timestamp in seconds
  * @param {Object} options - Additional options
+ * @param {boolean} options.includeUpdated - Also search by updated_at (default: true)
  * @returns {Promise<Array>} - Array of ticket objects
  */
 export async function searchTickets(sinceTimestamp, options = {}) {
@@ -24,35 +25,41 @@ export async function searchTickets(sinceTimestamp, options = {}) {
   }
 
   const {
-    limit = 50
+    limit = 50,
+    includeUpdated = true // Default to true to catch SLA status changes
   } = options;
 
   // Build search query
-  // Using the Search API with timestamp filter
-  // Note: Intercom expects timestamp as a number (Unix timestamp in seconds)
+  // Search for tickets created OR updated after timestamp
+  // This ensures we catch SLA status changes on older tickets
   const query = {
     query: {
-      operator: 'AND',
+      operator: includeUpdated ? 'OR' : 'AND',
       value: [
         {
           field: 'created_at',
           operator: '>=',
-          value: sinceTimestamp // Unix timestamp in seconds
-        }
+          value: sinceTimestamp
+        },
+        ...(includeUpdated ? [{
+          field: 'updated_at',
+          operator: '>=',
+          value: sinceTimestamp
+        }] : [])
       ]
     },
     pagination: {
       per_page: limit
     },
     sort: {
-      field: 'created_at',
-      order: 'ascending'
+      field: 'updated_at', // Sort by updated_at to prioritize recently changed tickets
+      order: 'descending'
     }
   };
 
   const url = `${INTERCOM_BASE_URL}/tickets/search`;
 
-  console.log(`Searching tickets created after ${new Date(sinceTimestamp * 1000).toISOString()}`);
+  console.log(`Searching tickets ${includeUpdated ? 'created or updated' : 'created'} after ${new Date(sinceTimestamp * 1000).toISOString()}`);
 
   try {
     const response = await fetch(url, {
@@ -76,7 +83,7 @@ export async function searchTickets(sinceTimestamp, options = {}) {
     // Intercom API v2.11 returns tickets in data._results or data.tickets
     const tickets = data._results || data.tickets || data.data || [];
 
-    console.log(`Found ${tickets.length} tickets created after ${new Date(sinceTimestamp * 1000).toISOString()}`);
+    console.log(`Found ${tickets.length} tickets ${includeUpdated ? 'created or updated' : 'created'} after ${new Date(sinceTimestamp * 1000).toISOString()}`);
 
     return tickets;
   } catch (err) {
