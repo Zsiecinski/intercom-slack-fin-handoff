@@ -7,6 +7,7 @@ import 'dotenv/config';
 import { searchTickets, getAdmin } from './tickets.js';
 import { getLastCheckTime, updateLastCheckTime, initializeState } from './state.js';
 import { sendTicketAssignmentDM, getTicketLink } from './ticket-notifier.js';
+import { isOptedIn } from './preferences.js';
 
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL || '120000', 10); // Default 2 minutes
 const INTERCOM_ACCESS_TOKEN = process.env.INTERCOM_ACCESS_TOKEN || process.env.INTERCOM_TOKEN;
@@ -90,6 +91,13 @@ async function processTicket(ticket, lastCheckTime) {
       name: admin.name,
       email: admin.email
     };
+
+    // Check opt-in preference
+    const userOptedIn = isOptedIn(assigneeEmail);
+    if (!userOptedIn) {
+      console.log(`Skipping notification for ${assigneeEmail} - user opted out`);
+      return false;
+    }
 
     // Generate ticket link
     const ticketLink = getTicketLink(ticketId);
