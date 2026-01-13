@@ -18,8 +18,17 @@ if (!slaChannel && fs.existsSync(envPath)) {
   const match = envContent.match(/^SLA_ALERT_CHANNEL=(.+)$/m);
   if (match) {
     slaChannel = match[1].trim();
+    // Remove any trailing comments
+    slaChannel = slaChannel.split('#')[0].trim();
   }
 }
+
+// Debug output (will show in PM2 logs when starting)
+console.log('Ecosystem config loaded:');
+console.log('  .env path:', envPath);
+console.log('  .env exists:', fs.existsSync(envPath));
+console.log('  SLA_ALERT_CHANNEL from dotenv:', process.env.SLA_ALERT_CHANNEL);
+console.log('  SLA_ALERT_CHANNEL final value:', slaChannel || '#intercom-pings');
 
 module.exports = {
   apps: [{
@@ -30,7 +39,7 @@ module.exports = {
     exec_mode: 'fork',
     env: {
       NODE_ENV: 'production',
-      // Explicitly pass SLA_ALERT_CHANNEL
+      // Explicitly pass SLA_ALERT_CHANNEL - use the value we found or fallback
       SLA_ALERT_CHANNEL: slaChannel || '#intercom-pings'
     }
   }]
