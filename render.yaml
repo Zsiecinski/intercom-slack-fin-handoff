@@ -1,5 +1,5 @@
 services:
-  - type: web
+  - type: worker
     name: intercom-slack-fin-handoff
     env: node
     buildCommand: npm install
@@ -7,15 +7,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
       # Add your environment variables in Render dashboard:
-      # - INTERCOM_CLIENT_SECRET
-      # - INTERCOM_TOKEN
-      # - SLACK_BOT_TOKEN
-      # - FALLBACK_CHANNEL (optional)
-      # - EMAIL_DOMAIN (optional)
-      # - FIN_GATE_MODE (optional, default: required)
-      # - SLA_NUDGE_MINUTES (optional)
-      # - DEDUPE_TTL_SECONDS (optional, default: 600)
+      # - INTERCOM_ACCESS_TOKEN (required) - Intercom API access token
+      # - SLACK_BOT_TOKEN (required) - Slack bot token (xoxb-...)
+      # - FALLBACK_CHANNEL (optional) - Slack channel for fallback posts
+      # - EMAIL_DOMAIN (optional) - Domain for email mapping (default: staytuned.digital)
+      # - CHECK_INTERVAL (optional) - Polling interval in ms (default: 120000 = 2 minutes)
 
