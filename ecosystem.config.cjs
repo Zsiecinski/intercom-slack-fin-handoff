@@ -1,6 +1,9 @@
 // PM2 Ecosystem file for SLA Dashboard
 // Note: PM2 uses CommonJS, not ES modules
 
+// Load .env file to read environment variables
+require('dotenv').config({ path: '/root/intercom-slack-fin-handoff/.env' });
+
 module.exports = {
   apps: [{
     name: 'sla-dashboard',
@@ -9,9 +12,9 @@ module.exports = {
     instances: 1,
     exec_mode: 'fork',
     env: {
-      NODE_ENV: 'production'
-    },
-    // PM2 will automatically load .env from cwd if dotenv/config is used in the script
-    // But we can also explicitly set env vars here if needed
+      NODE_ENV: 'production',
+      // Explicitly pass SLA_ALERT_CHANNEL from .env
+      SLA_ALERT_CHANNEL: process.env.SLA_ALERT_CHANNEL || null
+    }
   }]
 };
