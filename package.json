@@ -1,28 +1,26 @@
 {
   "name": "intercom-slack-fin-handoff",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
-  "description": "Webhook service to notify Slack when Intercom conversations with Fin are assigned to admins",
-  "main": "src/server.js",
+  "description": "Polling service to notify Slack when Intercom tickets are assigned to admins",
+  "main": "src/poll.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "test-tokens": "node src/test-tokens.js",
-    "test": "node src/test-tokens.js",
-    "test-extraction": "node src/test-webhook-extraction.js",
-    "test-webhook": "node src/test-webhook-manual.js",
-    "test-conversation": "node src/test-conversation.js",
-    "test-preferences": "node src/test-preferences.js"
+    "start": "node src/poll.js",
+    "dev": "node --watch src/poll.js",
+    "poll": "node src/poll.js",
+    "test": "node src/test-poll.js",
+    "test-once": "node src/test-poll-once.js",
+    "test-tokens": "node src/test-tokens.js"
   },
   "keywords": [
     "intercom",
     "slack",
-    "webhook"
+    "tickets",
+    "polling"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
     "dotenv": "^16.3.1"
   },
   "devDependencies": {

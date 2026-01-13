@@ -1,29 +1,27 @@
-# Intercom-Slack Fin Handoff Service
+# Intercom-Slack Ticket Assignment Notifier
 
-A production-ready Node.js (ESM) + Express webhook service that sends Slack DMs to admins when Intercom conversations involving Fin (AI agent) are assigned to them.
+A Node.js polling service that monitors Intercom Tickets API and sends Slack DMs to admins when tickets are assigned to them.
 
 ## Features
 
-- ✅ **Robust Fin Detection**: Multi-source AI agent detection with extensive logging
-- ✅ **Assignment Change Control**: Only notifies on real assignment changes
-- ✅ **Deduplication**: Prevents duplicate notifications (webhook ID + assignment-based)
-- ✅ **Slack Block Kit**: Rich, formatted messages with context
+- ✅ **Polling-Based**: Polls Intercom Tickets API every 1-2 minutes
+- ✅ **Efficient Search**: Uses Intercom REST API v2.11+ Search endpoint with timestamp filtering
+- ✅ **State Management**: Tracks last check timestamp in JSON file to avoid duplicate notifications
+- ✅ **Slack Integration**: Sends rich Block Kit formatted DMs to assigned agents
 - ✅ **Fallback Channel**: Posts to channel if DM lookup fails
-- ✅ **SLA Nudge**: Optional follow-up reminders if no admin reply
-- ✅ **Structured Logging**: JSON logs with requestId, webhookId, decision tracking
-- ✅ **Operational Hardening**: Health checks, error handling, signature verification
+- ✅ **Deduplication**: Prevents duplicate notifications within polling cycles
+- ✅ **Error Handling**: Robust error handling and logging
+- ✅ **Rate Limit Safe**: Respects Intercom's 10,000 calls/minute limit
 
 ## Architecture
 
 ```
 src/
-├── server.js          # Express server, routes, signature verification
-├── intercom.js        # Intercom API client (conversations, admins)
-├── fin.js             # Fin involvement detection with extensive logging
-├── slack.js           # Slack integration (Block Kit, DM, fallback channel)
-├── dedupe.js          # Deduplication with TTL Map (Redis-ready)
-├── nudge.js           # SLA nudge scheduler
-└── webhook-handler.js # Main webhook processing logic
+├── poll.js           # Main polling script
+├── tickets.js         # Intercom Tickets API client
+├── state.js           # State management (last check timestamp)
+├── ticket-notifier.js # Slack notification logic
+└── slack.js           # Slack API integration
 ```
 
 ## Setup
@@ -34,45 +32,26 @@ src/
    ```
 
 2. **Configure environment variables:**
+   Create a `.env` file:
    ```bash
-   cp .env.example .env
-   ```
+   # Intercom Configuration
+   INTERCOM_ACCESS_TOKEN=your_intercom_api_token_here
    
-   Edit `.env` and configure:
-   - `INTERCOM_CLIENT_SECRET` - Intercom webhook client secret
-   - `INTERCOM_TOKEN` - Intercom API access token
-   - `SLACK_BOT_TOKEN` - Slack bot token (starts with `xoxb-`)
-   - `FALLBACK_CHANNEL` - (Optional) Slack channel ID/name for fallback posts
-   - `EMAIL_DOMAIN` - Domain for mapping Intercom emails (default: staytuned.digital)
-   - `FIN_GATE_MODE` - `required` (default) or `log_only`
-   - `SLA_NUDGE_MINUTES` - (Optional) Minutes to wait before nudge check
-   - `DEDUPE_TTL_SECONDS` - Deduplication TTL (default: 600)
+   # Slack Configuration
+   SLACK_BOT_TOKEN=xoxb-your-slack-bot-token-here
+   FALLBACK_CHANNEL=#your-fallback-channel-id-or-name
+   
+   # Email Mapping (optional)
+   EMAIL_DOMAIN=staytuned.digital
+   
+   # Polling Configuration (optional)
+   CHECK_INTERVAL=120000  # milliseconds (default: 120000 = 2 minutes)
+   ```
 
-3. **Start the server:**
+3. **Start the polling service:**
    ```bash
    npm start
    ```
-
-## Safe Rollout Guide
-
-### Phase 1: Fallback Channel Only (Recommended Start)
-1. Set `FALLBACK_CHANNEL=#your-channel-id` in `.env`
-2. Set `FIN_GATE_MODE=log_only` to see Fin detection without blocking
-3. Deploy and monitor logs
-4. Verify notifications appear in fallback channel
-5. Check Fin detection accuracy in logs
-
-### Phase 2: Enable Direct DMs
-1. Keep `FALLBACK_CHANNEL` set (for safety)
-2. Set `FIN_GATE_MODE=required` (production mode)
-3. Deploy and monitor
-4. Verify DMs are sent correctly
-5. Monitor for any issues
-
-### Phase 3: Enable SLA Nudge (Optional)
-1. Set `SLA_NUDGE_MINUTES=5` (or desired minutes)
-2. Deploy and monitor
-3. Verify nudges work correctly
 
 ## Configuration
 
@@ -80,299 +59,200 @@ src/
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `INTERCOM_CLIENT_SECRET` | Intercom webhook client secret | Yes | - |
-| `INTERCOM_TOKEN` | Intercom API access token | Yes | - |
+| `INTERCOM_ACCESS_TOKEN` | Intercom API access token | Yes | - |
 | `SLACK_BOT_TOKEN` | Slack bot token (xoxb-...) | Yes | - |
 | `FALLBACK_CHANNEL` | Slack channel for fallback posts | No | - |
 | `EMAIL_DOMAIN` | Domain for email mapping | No | staytuned.digital |
-| `FIN_GATE_MODE` | Fin gate mode: `required` or `log_only` | No | required |
-| `SLA_NUDGE_MINUTES` | Minutes before SLA nudge check | No | disabled |
-| `DEDUPE_TTL_SECONDS` | Deduplication TTL | No | 600 |
-| `PORT` | Server port | No | 3000 |
+| `CHECK_INTERVAL` | Polling interval in milliseconds | No | 120000 (2 min) |
 
-### FIN_GATE_MODE Options
+### CHECK_INTERVAL Recommendations
 
-- **`required`** (default): Only send DMs when Fin is confirmed involved. Fail closed.
-- **`log_only`**: Log Fin detection results but send DMs regardless. Useful for initial rollout.
-
-## API Endpoints
-
-### POST /intercom/webhook
-Receives Intercom webhooks. Verifies signature and processes `conversation.admin.assigned` events.
-
-**Headers:**
-- `X-Hub-Signature`: HMAC-SHA1 signature (required)
-
-**Response:**
-- `200` - Webhook received and processed
-- `401` - Invalid or missing signature
-
-### POST /slack/command
-Handles Slack slash commands for opt-in/opt-out.
-
-**Commands:**
-- `/cx-alerts opt-in` - Enable notifications
-- `/cx-alerts opt-out` - Disable notifications
-- `/cx-alerts status` - Check current status
-
-### POST /slack/interactive
-Handles Slack interactive button actions (opt-out button in DMs).
-
-### GET /health
-Health check endpoint with stats.
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-01-01T00:00:00.000Z",
-  "dedupe": {
-    "size": 42,
-    "ttlSeconds": 600
-  },
-  "nudge": {
-    "enabled": true,
-    "scheduled": 3,
-    "slaMinutes": 5
-  },
-  "preferences": {
-    "total": 10,
-    "optedIn": 8,
-    "optedOut": 2,
-    "defaultOptIn": true
-  },
-  "messages": {
-    "total": 42,
-    "hours": 24,
-    "breakdown": [
-      { "hour": "2024-01-01T00:00:00.000Z", "count": 5 }
-    ]
-  }
-}
-```
-
-### GET /preferences
-List all user preferences (opt-in/opt-out status).
-
-**Response:**
-```json
-{
-  "stats": {
-    "total": 10,
-    "optedIn": 8,
-    "optedOut": 2,
-    "defaultOptIn": true
-  },
-  "optedIn": [
-    {
-      "email": "user@example.com",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    }
-  ],
-  "optedOut": [
-    {
-      "email": "user2@example.com",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    }
-  ],
-  "all": [
-    {
-      "email": "user@example.com",
-      "optedIn": true,
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    }
-  ]
-}
-```
+- **Minimum**: 60000ms (1 minute) - More frequent checks, higher API usage
+- **Recommended**: 120000ms (2 minutes) - Good balance
+- **Maximum**: 300000ms (5 minutes) - Less frequent, may miss rapid assignments
 
 ## How It Works
 
-1. **Webhook Reception**: Server receives POST at `/intercom/webhook`
-2. **Signature Verification**: Validates `X-Hub-Signature` using HMAC-SHA1
-3. **Deduplication**: Checks webhook ID and assignment-based dedupe
-4. **Assignment Extraction**: Extracts conversation ID, assignee ID, and assignment timestamp
-5. **Noise Control**: Skips if:
-   - Conversation not open
-   - Team assignment (unless FALLBACK_CHANNEL set)
-   - Missing assignee email
-6. **Fin Detection**: Checks multiple sources for AI agent involvement
-7. **Fin Gate**: Applies FIN_GATE_MODE (required or log_only)
-8. **Slack Notification**: Sends Block Kit DM or posts to fallback channel
-9. **SLA Nudge**: Schedules follow-up check if enabled
+1. **Initialization**: On first run, creates `state.json` with current timestamp
+2. **Polling Loop**: Every CHECK_INTERVAL milliseconds:
+   - Reads last check timestamp from `state.json`
+   - Searches Intercom Tickets API for tickets created after last check
+   - Processes each ticket to find admin assignments
+   - Sends Slack DM to assigned admin
+   - Updates `state.json` with new timestamp
+3. **Deduplication**: Tracks processed assignments within each polling cycle
+4. **Error Handling**: Continues polling even if individual tickets fail
 
-## Fin Detection
+## API Endpoints Used
 
-The service checks multiple sources for Fin/AI agent involvement:
+### Intercom Tickets API v2.11+
 
-1. **Conversation Parts**: `author.from_ai_agent`, `author.is_ai_answer`, `author.type === 'bot'`
-2. **Top-level Fields**: `ai_agent`, `ai_agent_participated`
-3. **Custom Attributes**: Fields containing "Fin", "AI", or "Bot"
-4. **Source Type**: Bot/AI source indicators
-5. **Statistics**: AI-related metadata
+- **POST /tickets/search** - Search for tickets with filters
+  - Filters by `created_at >= lastCheckTime`
+  - Returns tickets with `admin_assignee_id` field
+  - Supports pagination (up to 100 tickets per poll)
 
-All checks are logged with matched rules for debugging.
+- **GET /tickets/{id}** - Get ticket details (if needed)
 
-## Deduplication
+- **GET /admins/{id}** - Get admin details (email, name)
 
-Two-level deduplication:
+### Slack Web API
 
-1. **Webhook ID**: Uses `payload.id` (notif_xxx) for 10 minutes
-2. **Assignment Key**: Uses `conversationId + assigneeEmail + lastAssignmentAt` for 10 minutes
+- **POST /users.lookupByEmail** - Find Slack user by email
+- **POST /conversations.open** - Open DM channel
+- **POST /chat.postMessage** - Send message with Block Kit
 
-Prevents:
-- Duplicate webhook deliveries
-- Rapid reassignment spam
-- Multiple notifications for same assignment
+## State Management
 
-## Slack Block Kit Format
+The service stores its state in `state.json`:
 
-Messages include:
-- **Header**: "Assigned after Fin handoff"
-- **Section**: Assignee name, conversation ID, brand/language
-- **Context**: Source type, priority, language
-- **Warning**: If email contains links
+```json
+{
+  "lastCheckTime": 1704067200,
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+- `lastCheckTime`: Unix timestamp (seconds) of last successful poll
+- `updatedAt`: ISO timestamp for debugging
+
+**Note**: `state.json` is gitignored and created automatically on first run.
+
+## Slack Notification Format
+
+Notifications include:
+- **Header**: "🎫 New Ticket Assigned"
+- **Fields**: Assignee name, Ticket ID, State, Created time
+- **Subject**: Ticket subject/name
+- **Description**: Ticket description (truncated to 500 chars)
 - **Button**: "Open in Intercom" link
 
-## Testing
+## Rate Limiting
 
-### Unit Tests
+Intercom API allows **10,000 calls per minute**. With default settings:
+- Poll every 2 minutes = 30 polls/hour
+- Each poll makes ~1-3 API calls (search + admin lookups)
+- **Well within limits** even at 1-minute intervals
 
-#### Test Token Configuration
-```bash
-npm run test-tokens
-```
-Verifies that Intercom and Slack tokens are configured correctly.
+## Error Handling
 
-#### Test Webhook Extraction Logic
-```bash
-npm run test-extraction
-```
-Tests the webhook payload extraction logic with various scenarios:
-- Standard admin assignment
-- Team + agent assignment (critical fix)
-- Conversation parts assignments
-- Edge cases (team-only, missing data, etc.)
-
-### Manual Testing
-
-#### 1. Start Server
-```bash
-npm start
-```
-
-#### 2. Send Test Webhook
-In another terminal, send a test webhook:
-```bash
-# Standard admin assignment
-npm run test-webhook standard
-
-# Team + agent assignment (tests the fix)
-npm run test-webhook team-agent
-
-# Team only (should be ignored)
-npm run test-webhook team-only
-
-# Conversation parts format
-npm run test-webhook conversation-parts
-```
-
-#### 3. Check User Preferences
-```bash
-# Show all preferences
-npm run test-preferences
-
-# Check specific user
-npm run test-preferences user@example.com
-```
-
-#### 3. Expose with ngrok (for real Intercom webhooks)
-```bash
-ngrok http 3000
-```
-
-#### 4. Configure Intercom Webhook
-- **Production URL**: `https://intercom-slack-fin-handoff.onrender.com/intercom/webhook`
-- **Local Testing URL**: `https://your-ngrok-url.ngrok.io/intercom/webhook`
-- Topic: `conversation.admin.assigned`
-- Permission: `read_conversations`
-
-#### 5. Test Real Webhook
-Assign a conversation in Intercom and check:
-- Server logs (structured JSON)
-- Slack DM or fallback channel
-- Health endpoint stats (`GET /health`)
+- **API Errors**: Logged and polling continues
+- **Missing Assignee**: Skipped (team-only assignments)
+- **Slack Errors**: Falls back to channel if configured
+- **State File Errors**: Creates new state file if corrupted
 
 ## Logging
 
-All logs are structured JSON with:
-- `requestId` - Unique request identifier
-- `webhookId` - Intercom webhook ID
-- `conversationId` - Conversation ID
-- `assigneeEmail` - Assignee email
-- `finInvolved` - Fin detection result
-- `decision` - Processing decision (sent/ignored/failed)
-- `reason` - Decision reason
-- `timestamp` - ISO timestamp
+The service logs:
+- Poll start/end times
+- Number of tickets found
+- Notifications sent
+- Errors and warnings
 
-Example log:
-```json
-{
-  "requestId": "req_1234567890_abc123",
-  "webhookId": "notif_xxx",
-  "conversationId": "215472586672049",
-  "assigneeEmail": "admin@example.com",
-  "finInvolved": true,
-  "finMatchedRules": ["conversation_parts.author.from_ai_agent=true"],
-  "decision": "sent",
-  "usedFallback": false,
-  "timestamp": "2024-01-01T00:00:00.000Z"
-}
+Example log output:
+```
+[2024-01-01T00:00:00.000Z] Starting poll...
+Last check time: 2023-12-31T23:58:00.000Z
+Found 5 tickets to process
+✅ Sent notification for ticket 12345 assigned to admin@example.com
+Poll completed in 1234ms. Sent 3 notifications.
+Next poll in 120 seconds
 ```
 
 ## Troubleshooting
 
-### Fin Not Detected
-- Check logs for `finMatchedRules` - see which rules were checked
-- Verify conversation has AI agent indicators
-- Try `FIN_GATE_MODE=log_only` to see detection without blocking
+### No Notifications Being Sent
+
+1. **Check state.json**: Verify `lastCheckTime` is updating
+2. **Check logs**: Look for API errors or missing assignees
+3. **Verify tokens**: Ensure `INTERCOM_ACCESS_TOKEN` and `SLACK_BOT_TOKEN` are valid
+4. **Check ticket assignments**: Verify tickets actually have `admin_assignee_id`
 
 ### Duplicate Notifications
-- Check dedupe stats in `/health` endpoint
-- Verify `DEDUPE_TTL_SECONDS` is appropriate
-- Check logs for `decision: ignored, reason: webhook_duplicate`
 
-### Slack DM Not Sending
-- Verify `SLACK_BOT_TOKEN` has required scopes:
-  - `users:read.email`
-  - `im:write`
-  - `chat:write`
-- Check if fallback channel is being used
-- Review logs for Slack API errors
+- Deduplication is per polling cycle
+- If you restart the service, it may re-process recent tickets
+- Consider adjusting `lastCheckTime` in `state.json` if needed
 
-### Team Assignments Not Notifying
-- Set `FALLBACK_CHANNEL` to receive team assignment notifications
-- Or modify code to handle team assignments differently
+### High API Usage
+
+- Increase `CHECK_INTERVAL` to poll less frequently
+- Check logs for unnecessary API calls
 
 ## Production Deployment
 
-1. **Set Environment Variables**: Use secure secret management
-2. **Enable FIN_GATE_MODE=required**: Production mode
-3. **Set FALLBACK_CHANNEL**: Safety net for failed DMs
-4. **Monitor Logs**: Use structured JSON logs with log aggregation
-5. **Health Checks**: Monitor `/health` endpoint
-6. **Deduplication**: Consider Redis for distributed deployments
+### Running as a Service
 
-## Deployment
+**Using PM2:**
+```bash
+npm install -g pm2
+pm2 start src/poll.js --name intercom-ticket-poller
+pm2 save
+pm2 startup
+```
 
-See [DEPLOY.md](./DEPLOY.md) for detailed deployment instructions, including Render.com setup.
+**Using systemd:**
+Create `/etc/systemd/system/intercom-ticket-poller.service`:
+```ini
+[Unit]
+Description=Intercom Ticket Assignment Notifier
+After=network.target
 
-### Production URLs
+[Service]
+Type=simple
+User=your-user
+WorkingDirectory=/path/to/intercom-slack-fin-handoff
+ExecStart=/usr/bin/node src/poll.js
+Restart=always
+EnvironmentFile=/path/to/.env
 
-- **Service**: https://intercom-slack-fin-handoff.onrender.com
-- **Webhook Endpoint**: https://intercom-slack-fin-handoff.onrender.com/intercom/webhook
-- **Health Check**: https://intercom-slack-fin-handoff.onrender.com/health
-- **Slack Command**: https://intercom-slack-fin-handoff.onrender.com/slack/command
-- **Slack Interactive**: https://intercom-slack-fin-handoff.onrender.com/slack/interactive
+[Install]
+WantedBy=multi-user.target
+```
+
+### Docker
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+CMD ["node", "src/poll.js"]
+```
+
+### Environment Variables in Production
+
+Use secure secret management:
+- **Render**: Environment variables in dashboard
+- **Heroku**: `heroku config:set INTERCOM_ACCESS_TOKEN=...`
+- **AWS**: Secrets Manager or Parameter Store
+- **Docker**: Environment file or secrets
+
+## Development
+
+### Testing
+
+```bash
+# Test token configuration
+npm run test-tokens
+
+# Run in development mode (with watch)
+npm run dev
+```
+
+### Manual State Reset
+
+To reset polling state (start from now):
+```bash
+rm state.json
+npm start
+```
+
+To start from a specific time:
+```bash
+# Edit state.json and set lastCheckTime to desired Unix timestamp
+```
 
 ## License
 

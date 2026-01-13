@@ -32,3 +32,6 @@ build/
 tmp/
 temp/
 
+# State file
+state.json
+
