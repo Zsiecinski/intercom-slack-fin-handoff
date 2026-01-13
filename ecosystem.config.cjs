@@ -3,11 +3,23 @@
 
 // Load .env file to read environment variables
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+const fs = require('fs');
 
-// Debug: log what we're reading
-console.log('Loading .env from:', path.join(__dirname, '.env'));
-console.log('SLA_ALERT_CHANNEL from .env:', process.env.SLA_ALERT_CHANNEL);
+// Try to load .env file
+const envPath = path.join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+  require('dotenv').config({ path: envPath });
+}
+
+// Read SLA_ALERT_CHANNEL directly from .env file as fallback
+let slaChannel = process.env.SLA_ALERT_CHANNEL;
+if (!slaChannel && fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf-8');
+  const match = envContent.match(/^SLA_ALERT_CHANNEL=(.+)$/m);
+  if (match) {
+    slaChannel = match[1].trim();
+  }
+}
 
 module.exports = {
   apps: [{
@@ -18,8 +30,8 @@ module.exports = {
     exec_mode: 'fork',
     env: {
       NODE_ENV: 'production',
-      // Explicitly pass SLA_ALERT_CHANNEL from .env (only if it exists)
-      ...(process.env.SLA_ALERT_CHANNEL && { SLA_ALERT_CHANNEL: process.env.SLA_ALERT_CHANNEL })
+      // Explicitly pass SLA_ALERT_CHANNEL
+      SLA_ALERT_CHANNEL: slaChannel || '#intercom-pings'
     }
   }]
 };
