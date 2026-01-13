@@ -14,7 +14,7 @@ module.exports = {
     env: {
       NODE_ENV: 'production',
       // Explicitly pass SLA_ALERT_CHANNEL from .env
-      SLA_ALERT_CHANNEL: process.env.SLA_ALERT_CHANNEL || null
+      SLA_ALERT_CHANNEL: process.env.SLA_ALERT_CHANNEL || undefined
     }
   }]
 };
