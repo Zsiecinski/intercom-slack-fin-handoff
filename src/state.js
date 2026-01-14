@@ -86,11 +86,21 @@ export async function isAssignmentNotified(ticketId, assigneeId, assignmentTimes
     return true;
   }
   
-  // If the timestamp is different but very close (within 60 seconds), 
+  // If the timestamp is different but very close (within 5 minutes), 
   // it's likely the same assignment being reprocessed due to ticket updates
   // This handles cases where updated_at changes but assignment hasn't actually changed
+  // Increased to 5 minutes to handle cases where assignment timestamp is recalculated
   const timeDiff = Math.abs(notifiedAssignment.assignmentTimestamp - assignmentTimestamp);
-  if (timeDiff < 60 && notifiedAssignment.assigneeId === assigneeId) {
+  if (timeDiff < 300 && notifiedAssignment.assigneeId === assigneeId) {
+    console.log(`Skipping duplicate assignment: ${ticketId}:${assigneeId} (timestamp diff: ${timeDiff}s, within 5min window)`);
+    return true;
+  }
+  
+  // If the assignment was notified very recently (within last 10 minutes), 
+  // and assignee is the same, it's likely a duplicate
+  const notifiedAgo = Math.floor(Date.now() / 1000) - notifiedAssignment.notifiedAt;
+  if (notifiedAgo < 600 && notifiedAssignment.assigneeId === assigneeId) {
+    console.log(`Skipping duplicate assignment: ${ticketId}:${assigneeId} (notified ${notifiedAgo}s ago)`);
     return true;
   }
   

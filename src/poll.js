@@ -160,10 +160,18 @@ async function processTicket(ticket, lastCheckTime) {
     const result = await sendTicketAssignmentDM(assigneeEmail, ticket, ticketLink);
 
     if (result.success) {
-      // Mark as notified in persistent state
-      await markAssignmentNotified(ticketId, adminAssigneeId, assignmentTimestamp);
-      console.log(`✅ Sent notification for ticket ${ticketId} assigned to ${assigneeEmail}`);
-      return true;
+      // Mark as notified in persistent state BEFORE logging success
+      // This ensures we mark it even if there's an error after
+      try {
+        await markAssignmentNotified(ticketId, adminAssigneeId, assignmentTimestamp);
+        console.log(`✅ Sent notification for ticket ${ticketId} assigned to ${assigneeEmail}`);
+        return true;
+      } catch (stateErr) {
+        // Even if state save fails, log the notification was sent
+        console.error(`⚠️  Notification sent but failed to save state for ticket ${ticketId}:`, stateErr.message);
+        console.log(`✅ Sent notification for ticket ${ticketId} assigned to ${assigneeEmail} (state save failed)`);
+        return true; // Still return true since notification was sent
+      }
     } else {
       console.error(`❌ Failed to send notification for ticket ${ticketId}: ${result.reason}`);
       return false;
