@@ -53,8 +53,10 @@ async function backfillSLA() {
     let errors = 0;
     let noSLACount = 0;
     let ticketsByAssignee = {};
+    let filteredByAssignmentDate = 0;
     
     console.log(`📋 Processing ${tickets.length} tickets...\n`);
+    console.log(`📅 Filtering by assignment date: tickets assigned after ${new Date(sinceTimestamp * 1000).toISOString()}\n`);
     
     for (const ticket of tickets) {
       const ticketId = ticket.id || ticket.ticket_id;
@@ -66,6 +68,18 @@ async function backfillSLA() {
       try {
         // Fetch full ticket details
         const fullTicket = await getTicket(ticketId);
+        
+        // Filter by assignment date (not just created/updated date)
+        // Only process tickets that were assigned within the date range
+        const assignmentTimestamp = fullTicket.statistics?.first_assignment_at || 
+                                   fullTicket.statistics?.last_assignment_at || 
+                                   (fullTicket.admin_assignee_id ? fullTicket.updated_at : null);
+        
+        if (assignmentTimestamp && assignmentTimestamp < sinceTimestamp) {
+          // Ticket was assigned before our date range - skip it
+          filteredByAssignmentDate++;
+          continue;
+        }
         
         // Fetch assignee info if available
         // Check both admin_assignee_id and admin_assignee (in case it's already populated)
@@ -209,6 +223,8 @@ async function backfillSLA() {
     }
     
     console.log(`\n📊 Backfill Summary:`);
+    console.log(`   Total tickets fetched: ${tickets.length}`);
+    console.log(`   Tickets filtered out (assigned before date range): ${filteredByAssignmentDate}`);
     console.log(`   Total tickets processed: ${processedCount}`);
     console.log(`   Tickets with SLA found: ${slaFoundCount}`);
     console.log(`   Tickets without SLA: ${noSLACount}`);
