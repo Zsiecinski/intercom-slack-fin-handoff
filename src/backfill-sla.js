@@ -36,27 +36,14 @@ async function backfillSLA() {
     
     let tickets;
     try {
-      // Add a timeout wrapper
-      const searchPromise = searchTickets(sinceTimestamp, {
+      console.log('   Fetching tickets (this may take a while for large date ranges)...');
+      tickets = await searchTickets(sinceTimestamp, {
         limit: 150, // Maximum allowed by Intercom API
         includeUpdated: true
       });
-      
-      // Set a 60 second timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('API call timed out after 60 seconds')), 60000);
-      });
-      
-      tickets = await Promise.race([searchPromise, timeoutPromise]);
       console.log(`✅ Found ${tickets.length} tickets to process\n`);
     } catch (err) {
       console.error(`❌ Error searching tickets:`, err.message);
-      if (err.message.includes('timed out')) {
-        console.error('   The API call is taking too long. This might indicate:');
-        console.error('   - Network connectivity issues');
-        console.error('   - Intercom API is slow or overloaded');
-        console.error('   - Try reducing the time window (e.g., 12 hours instead of 24)');
-      }
       throw err;
     }
     
