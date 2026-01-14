@@ -171,11 +171,22 @@ app.get('/api/sla/stats', async (req, res) => {
     let tickets = getAllSLATickets();
     
     // Apply date filters if provided (same logic as /api/sla/tickets)
+    const dateType = req.query.date_type || 'assigned';
+    let dateField;
+    if (dateType === 'created') {
+      dateField = 'ticket_created_at';
+    } else if (dateType === 'deadline') {
+      dateField = 'deadline';
+    } else {
+      dateField = 'assigned_at';
+    }
+    
     if (req.query.date_from) {
       const dateFrom = new Date(req.query.date_from).getTime() / 1000;
       tickets = tickets.filter(t => {
-        if (!t.assigned_at) return false;
-        return t.assigned_at >= dateFrom;
+        const dateValue = t[dateField];
+        if (!dateValue) return false;
+        return dateValue >= dateFrom;
       });
     }
     
@@ -183,8 +194,9 @@ app.get('/api/sla/stats', async (req, res) => {
       const dateTo = new Date(req.query.date_to).getTime() / 1000;
       const dateToEnd = dateTo + (24 * 60 * 60);
       tickets = tickets.filter(t => {
-        if (!t.assigned_at) return false;
-        return t.assigned_at <= dateToEnd;
+        const dateValue = t[dateField];
+        if (!dateValue) return false;
+        return dateValue <= dateToEnd;
       });
     }
     
