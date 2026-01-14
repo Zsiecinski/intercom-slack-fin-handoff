@@ -555,6 +555,7 @@
             const sortBy = document.getElementById('sortBy').value;
             const dateFrom = document.getElementById('filterDateFrom').value;
             const dateTo = document.getElementById('filterDateTo').value;
+            const dateType = document.getElementById('filterDateType').value;
             
             const params = new URLSearchParams();
             if (status) params.append('status', status);
@@ -565,6 +566,7 @@
             if (sortBy) params.append('sort', sortBy);
             if (dateFrom) params.append('date_from', dateFrom);
             if (dateTo) params.append('date_to', dateTo);
+            if (dateType) params.append('date_type', dateType);
             
             try {
                 const response = await fetch(`/api/sla/tickets?${params}`);
