@@ -150,6 +150,13 @@ async function processTicket(ticket, lastCheckTime) {
     const userOptedIn = isOptedIn(assigneeEmail);
     if (!userOptedIn) {
       console.log(`Skipping notification for ${assigneeEmail} - user opted out`);
+      // IMPORTANT: Mark as notified even if user opted out to prevent duplicate processing
+      // This ensures the ticket won't appear again in the next poll
+      try {
+        await markAssignmentNotified(ticketId, adminAssigneeId, assignmentTimestamp);
+      } catch (stateErr) {
+        console.error(`⚠️  Failed to save state for opted-out assignment ${ticketId}:`, stateErr.message);
+      }
       return false;
     }
 
@@ -174,6 +181,7 @@ async function processTicket(ticket, lastCheckTime) {
       }
     } else {
       console.error(`❌ Failed to send notification for ticket ${ticketId}: ${result.reason}`);
+      // Don't mark as notified if notification failed - allow retry
       return false;
     }
   } catch (err) {
