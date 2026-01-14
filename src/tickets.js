@@ -94,49 +94,32 @@ export async function searchTickets(sinceTimestamp, options = {}) {
     });
     
     // Handle pagination if there are more results
-    // Intercom API v2.11 uses cursor-based pagination with pages.next
-    let nextPage = data.pages?.next;
+    // Intercom API v2.11 uses cursor-based pagination with pages.next.starting_after
     let pageCount = 1;
-    
-    // Also check for cursor-based pagination (starting_after)
     let startingAfter = data.pages?.next?.starting_after;
     
-    while ((nextPage || startingAfter) && tickets.length < 1000) { // Limit to 1000 tickets max to avoid infinite loops
+    // Continue paginating while there's a next page cursor
+    while (startingAfter && tickets.length < 1000) { // Limit to 1000 tickets max to avoid infinite loops
       try {
-        let nextResponse;
+        // Use cursor-based pagination with starting_after
+        const nextQuery = {
+          ...query,
+          pagination: {
+            per_page: limit,
+            starting_after: startingAfter
+          }
+        };
         
-        if (nextPage?.url) {
-          // Use the URL from pages.next
-          nextResponse = await fetch(nextPage.url, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${INTERCOM_ACCESS_TOKEN}`,
-              'Accept': 'application/json',
-              'Intercom-Version': '2.11'
-            }
-          });
-        } else if (startingAfter) {
-          // Use cursor-based pagination
-          const nextQuery = {
-            ...query,
-            pagination: {
-              ...query.pagination,
-              starting_after: startingAfter
-            }
-          };
-          nextResponse = await fetch(url, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${INTERCOM_ACCESS_TOKEN}`,
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'Intercom-Version': '2.11'
-            },
-            body: JSON.stringify(nextQuery)
-          });
-        } else {
-          break;
-        }
+        const nextResponse = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${INTERCOM_ACCESS_TOKEN}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Intercom-Version': '2.11'
+          },
+          body: JSON.stringify(nextQuery)
+        });
         
         if (!nextResponse.ok) {
           const errorText = await nextResponse.text();
@@ -146,9 +129,14 @@ export async function searchTickets(sinceTimestamp, options = {}) {
         
         const nextData = await nextResponse.json();
         const nextTickets = nextData._results || nextData.tickets || nextData.data || [];
+        
+        if (nextTickets.length === 0) {
+          // No more tickets
+          break;
+        }
+        
         tickets = tickets.concat(nextTickets);
         pageCount++;
-        nextPage = nextData.pages?.next;
         startingAfter = nextData.pages?.next?.starting_after;
         
         console.log(`📄 Fetched page ${pageCount}: ${nextTickets.length} tickets (total: ${tickets.length})`);
