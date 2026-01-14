@@ -257,21 +257,49 @@ async function poll() {
             }
           }
           
-          // If ticket doesn't have SLA, try fetching the conversation
-          // (tickets created from conversations may have SLA on the conversation)
-          if (!fullTicket.sla_applied && (!fullTicket.linked_objects?.data || fullTicket.linked_objects.data.length === 0)) {
+          // Fetch tags from linked conversations (tags are on conversations, not tickets)
+          let conversationTags = [];
+          if (fullTicket.linked_objects?.data) {
+            for (const linked of fullTicket.linked_objects.data) {
+              if (linked.type === 'conversation') {
+                try {
+                  const conversation = await getConversation(linked.id);
+                  // Tags are on the conversation object
+                  if (conversation.tags && Array.isArray(conversation.tags)) {
+                    conversationTags = conversationTags.concat(conversation.tags);
+                  }
+                  // Also merge SLA if ticket doesn't have it
+                  if (!fullTicket.sla_applied && conversation.sla_applied) {
+                    fullTicket.sla_applied = conversation.sla_applied;
+                    console.log(`[SLA] Found SLA on conversation for ticket ${ticket.id}: ${conversation.sla_applied.sla_name || 'Unknown'}`);
+                  }
+                } catch (convErr) {
+                  // Conversation fetch failed - continue
+                }
+              }
+            }
+          }
+          
+          // If no linked conversations found, try fetching ticket ID as conversation
+          // (tickets created from conversations may use conversation ID as ticket ID)
+          if (conversationTags.length === 0 && (!fullTicket.sla_applied || !fullTicket.linked_objects?.data || fullTicket.linked_objects.data.length === 0)) {
             try {
-              // Try fetching as conversation (ticket ID might be conversation ID)
               const conversation = await getConversation(ticket.id);
+              if (conversation.tags && Array.isArray(conversation.tags)) {
+                conversationTags = conversation.tags;
+              }
               if (conversation.sla_applied) {
-                // Merge SLA from conversation into ticket
                 fullTicket.sla_applied = conversation.sla_applied;
                 console.log(`[SLA] Found SLA on conversation for ticket ${ticket.id}: ${conversation.sla_applied.sla_name || 'Unknown'}`);
               }
             } catch (convErr) {
               // Not a conversation or conversation fetch failed - that's okay
-              // We'll proceed with ticket data only
             }
+          }
+          
+          // Merge conversation tags into ticket object for SLA check
+          if (conversationTags.length > 0) {
+            fullTicket.tags = conversationTags;
           }
           
           const slaResult = await checkSLAStatus(fullTicket);

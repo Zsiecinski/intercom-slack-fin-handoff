@@ -72,21 +72,19 @@ async function updateAssignees() {
           }
         }
         
-        // Update tags if missing
+        // Update tags if missing (tags are on conversations, not tickets)
         if (!ticketState.tags || ticketState.tags.length === 0) {
-          let tags = getTicketTags(ticket);
+          let tags = [];
           
-          // If no tags on ticket, check linked conversation
-          if (tags.length === 0 && ticket.linked_objects?.data) {
+          // Check linked conversations for tags
+          if (ticket.linked_objects?.data) {
             for (const linked of ticket.linked_objects.data) {
               if (linked.type === 'conversation') {
                 try {
                   const conversation = await getConversation(linked.id);
-                  const convTags = getTicketTags(conversation); // Reuse same function
-                  if (convTags.length > 0) {
-                    tags = convTags;
-                    console.log(`   Found ${tags.length} tag(s) on linked conversation ${linked.id}`);
-                    break;
+                  // Tags are on the conversation object
+                  if (conversation.tags && Array.isArray(conversation.tags)) {
+                    tags = tags.concat(conversation.tags);
                   }
                 } catch (convErr) {
                   // Conversation fetch failed - continue
@@ -95,18 +93,35 @@ async function updateAssignees() {
             }
           }
           
-          if (tags.length > 0) {
-            ticketState.tags = tags;
-            ticketState.has_unwarranted_tag = tags.some(tag => {
-              const tagName = typeof tag === 'string' ? tag : (tag.name || tag.id || '');
-              return tagName.toLowerCase().includes('unwarranted sla');
-            });
+          // If no linked conversations found, try fetching ticket ID as conversation
+          // (tickets created from conversations may use conversation ID as ticket ID)
+          if (tags.length === 0) {
+            try {
+              const conversation = await getConversation(ticketId);
+              if (conversation.tags && Array.isArray(conversation.tags)) {
+                tags = conversation.tags;
+              }
+            } catch (convErr) {
+              // Not a conversation or conversation fetch failed - that's okay
+            }
+          }
+          
+          // Convert tags to array of strings
+          const tagNames = tags.map(tag => {
+            return typeof tag === 'string' ? tag : (tag.name || tag.id || '');
+          }).filter(tag => tag); // Remove empty strings
+          
+          if (tagNames.length > 0) {
+            ticketState.tags = tagNames;
+            ticketState.has_unwarranted_tag = tagNames.some(tagName => 
+              tagName.toLowerCase().includes('unwarranted sla')
+            );
             tagsUpdated++;
             needsUpdate = true;
             if (ticketState.has_unwarranted_tag) {
               console.log(`🏷️  Ticket ${ticketId}: Found "unwarranted sla" tag`);
             } else {
-              console.log(`🏷️  Ticket ${ticketId}: Found ${tags.length} tag(s)`);
+              console.log(`🏷️  Ticket ${ticketId}: Found ${tagNames.length} tag(s)`);
             }
           }
         }
