@@ -612,6 +612,12 @@
             }).join('');
         }
 
+        function clearDateFilter() {
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            loadData();
+        }
+        
         // Auto-refresh
         document.getElementById('autoRefresh').addEventListener('change', (e) => {
             if (e.target.checked) {
