@@ -51,6 +51,10 @@ async function backfillSLA() {
     let slaFoundCount = 0;
     let slaTrackedCount = 0;
     let errors = 0;
+    let noSLACount = 0;
+    let ticketsByAssignee = {};
+    
+    console.log(`📋 Processing ${tickets.length} tickets...\n`);
     
     for (const ticket of tickets) {
       const ticketId = ticket.id || ticket.ticket_id;
@@ -153,17 +157,30 @@ async function backfillSLA() {
           fullTicket.tags = conversationTags;
         }
         
+        // Track tickets by assignee for reporting
+        const assigneeName = fullTicket.admin_assignee?.name || 'Unassigned';
+        if (!ticketsByAssignee[assigneeName]) {
+          ticketsByAssignee[assigneeName] = { total: 0, withSLA: 0 };
+        }
+        ticketsByAssignee[assigneeName].total++;
+        
         // Check SLA status (this will update the cache and save to sla-state.json)
         // Note: This won't send alerts because we're not setting SLA_CHANNEL or it will only send if configured
         if (!isDryRun) {
           const slaResult = await checkSLAStatus(fullTicket);
           if (slaResult.alerted || fullTicket.sla_applied) {
             slaTrackedCount++;
+            ticketsByAssignee[assigneeName].withSLA++;
+          } else {
+            noSLACount++;
           }
         } else {
           // In dry run, just check if SLA would be tracked
           if (fullTicket.sla_applied && fullTicket.sla_applied.sla_status) {
             slaTrackedCount++;
+            ticketsByAssignee[assigneeName].withSLA++;
+          } else {
+            noSLACount++;
           }
         }
         
@@ -183,8 +200,17 @@ async function backfillSLA() {
     console.log(`\n📊 Backfill Summary:`);
     console.log(`   Total tickets processed: ${processedCount}`);
     console.log(`   Tickets with SLA found: ${slaFoundCount}`);
+    console.log(`   Tickets without SLA: ${noSLACount}`);
     console.log(`   SLAs tracked: ${slaTrackedCount}`);
     console.log(`   Errors: ${errors}`);
+    
+    // Show breakdown by assignee
+    console.log(`\n👥 Tickets by Assignee:`);
+    const sortedAssignees = Object.entries(ticketsByAssignee)
+      .sort((a, b) => b[1].total - a[1].total);
+    for (const [assignee, stats] of sortedAssignees) {
+      console.log(`   ${assignee}: ${stats.total} total, ${stats.withSLA} with SLA`);
+    }
     
     if (isDryRun) {
       console.log(`\n⚠️  DRY RUN - No changes were made`);
