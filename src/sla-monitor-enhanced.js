@@ -107,26 +107,41 @@ export async function trackAssignment(ticket) {
   const ticketId = ticket.id || ticket.ticket_id;
   if (!ticketId) return;
   
+  // Only track if ticket has an assignee
+  const assigneeId = ticket.admin_assignee_id || ticket.admin_assignee?.id;
+  if (!assigneeId) return; // No assignee, skip tracking
+  
   const assigneeName = ticket.admin_assignee?.name || null;
   const assigneeEmail = ticket.admin_assignee?.email || null;
+  
+  // Try multiple sources for assignment timestamp
   const assignedAt = ticket.statistics?.first_assignment_at || 
                      ticket.statistics?.last_assignment_at || 
-                     ticket.updated_at || 
+                     (ticket.admin_assignee_id ? ticket.updated_at : null) || 
                      null;
   
-  if (!assignedAt) return; // Can't track without assignment timestamp
+  // If we have an assignee but no timestamp, use updated_at as fallback
+  // This handles cases where statistics aren't available yet
+  const finalAssignedAt = assignedAt || (ticket.admin_assignee_id ? ticket.updated_at : null);
+  
+  if (!finalAssignedAt) {
+    // Still track it but log a warning
+    console.warn(`⚠️  Ticket ${ticketId} has assignee but no assignment timestamp - skipping assignment tracking`);
+    return;
+  }
   
   // Check if already tracked
   const existing = assignmentTrackingCache.get(ticketId);
-  if (existing && existing.assigned_at === assignedAt) {
-    return; // Already tracked
+  if (existing && existing.assigned_at === finalAssignedAt && existing.assignee_name === assigneeName) {
+    return; // Already tracked with same assignment
   }
   
   assignmentTrackingCache.set(ticketId, {
     ticket_id: ticketId,
+    assignee_id: assigneeId,
     assignee_name: assigneeName,
     assignee_email: assigneeEmail,
-    assigned_at: assignedAt,
+    assigned_at: finalAssignedAt,
     ticket_created_at: ticket.created_at || null,
     tracked_at: Math.floor(Date.now() / 1000)
   });

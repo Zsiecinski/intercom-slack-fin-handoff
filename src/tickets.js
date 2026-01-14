@@ -81,9 +81,42 @@ export async function searchTickets(sinceTimestamp, options = {}) {
 
     const data = await response.json();
     // Intercom API v2.11 returns tickets in data._results or data.tickets
-    const tickets = data._results || data.tickets || data.data || [];
+    let tickets = data._results || data.tickets || data.data || [];
+    
+    // Handle pagination if there are more results
+    let nextPage = data.pages?.next;
+    let pageCount = 1;
+    
+    while (nextPage && tickets.length < 1000) { // Limit to 1000 tickets max to avoid infinite loops
+      try {
+        const nextResponse = await fetch(nextPage.url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${INTERCOM_ACCESS_TOKEN}`,
+            'Accept': 'application/json',
+            'Intercom-Version': '2.11'
+          }
+        });
+        
+        if (!nextResponse.ok) {
+          console.warn(`Failed to fetch next page: ${nextResponse.status}`);
+          break;
+        }
+        
+        const nextData = await nextResponse.json();
+        const nextTickets = nextData._results || nextData.tickets || nextData.data || [];
+        tickets = tickets.concat(nextTickets);
+        pageCount++;
+        nextPage = nextData.pages?.next;
+        
+        console.log(`Fetched page ${pageCount}: ${nextTickets.length} tickets (total: ${tickets.length})`);
+      } catch (err) {
+        console.error('Error fetching next page:', err);
+        break;
+      }
+    }
 
-    console.log(`Found ${tickets.length} tickets ${includeUpdated ? 'created or updated' : 'created'} after ${new Date(sinceTimestamp * 1000).toISOString()}`);
+    console.log(`Found ${tickets.length} tickets ${includeUpdated ? 'created or updated' : 'created'} after ${new Date(sinceTimestamp * 1000).toISOString()} (${pageCount} page${pageCount > 1 ? 's' : ''})`);
 
     return tickets;
   } catch (err) {

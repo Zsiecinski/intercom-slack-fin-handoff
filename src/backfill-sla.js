@@ -158,14 +158,22 @@ async function backfillSLA() {
         }
         
         // Track all assignments (not just SLA tickets)
-        await trackAssignment(fullTicket);
+        // This will track tickets even if they don't have SLAs
+        try {
+          await trackAssignment(fullTicket);
+        } catch (trackErr) {
+          console.log(`   ⚠️  Could not track assignment for ticket ${ticketId}: ${trackErr.message}`);
+        }
         
-        // Track tickets by assignee for reporting
+        // Track tickets by assignee for reporting (for summary output)
         const assigneeName = fullTicket.admin_assignee?.name || 'Unassigned';
         if (!ticketsByAssignee[assigneeName]) {
           ticketsByAssignee[assigneeName] = { total: 0, withSLA: 0 };
         }
-        ticketsByAssignee[assigneeName].total++;
+        // Only count tickets that have an assignee
+        if (fullTicket.admin_assignee_id || fullTicket.admin_assignee) {
+          ticketsByAssignee[assigneeName].total++;
+        }
         
         // Check SLA status (this will update the cache and save to sla-state.json)
         // Note: This won't send alerts because we're not setting SLA_CHANNEL or it will only send if configured
