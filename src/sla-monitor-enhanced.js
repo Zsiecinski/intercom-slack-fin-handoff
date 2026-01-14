@@ -597,8 +597,13 @@ export function getAllSLATickets() {
 /**
  * Get SLA stats
  */
-export function getSLAStats() {
-  const tickets = getAllSLATickets();
+/**
+ * Get SLA stats, optionally from a filtered set of tickets
+ * @param {Array} filteredTickets - Optional pre-filtered tickets array. If not provided, uses all tickets.
+ * @returns {Object} - Stats object
+ */
+export function getSLAStats(filteredTickets = null) {
+  const tickets = filteredTickets || getAllSLATickets();
   const now = Math.floor(Date.now() / 1000);
   
   const active = tickets.filter(t => t.sla_status === 'active').length;

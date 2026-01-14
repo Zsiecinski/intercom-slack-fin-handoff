@@ -498,7 +498,17 @@
 
         async function loadStats() {
             try {
-                const response = await fetch('/api/sla/stats');
+                // Get date filters from the form
+                const dateFrom = document.getElementById('filterDateFrom').value;
+                const dateTo = document.getElementById('filterDateTo').value;
+                
+                // Build query params with date filters
+                const params = new URLSearchParams();
+                if (dateFrom) params.append('date_from', dateFrom);
+                if (dateTo) params.append('date_to', dateTo);
+                
+                const url = params.toString() ? `/api/sla/stats?${params}` : '/api/sla/stats';
+                const response = await fetch(url);
                 const data = await response.json();
                 
                 if (data.success) {

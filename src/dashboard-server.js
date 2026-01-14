@@ -149,12 +149,34 @@ app.get('/api/sla/tickets', async (req, res) => {
 /**
  * API: Get SLA stats
  * GET /api/sla/stats
+ * Query params: date_from, date_to (optional date filters)
  */
 app.get('/api/sla/stats', async (req, res) => {
   try {
     // Force reload before getting stats
     await reloadSLAState();
-    const stats = getSLAStats();
+    let tickets = getAllSLATickets();
+    
+    // Apply date filters if provided (same logic as /api/sla/tickets)
+    if (req.query.date_from) {
+      const dateFrom = new Date(req.query.date_from).getTime() / 1000;
+      tickets = tickets.filter(t => {
+        if (!t.assigned_at) return false;
+        return t.assigned_at >= dateFrom;
+      });
+    }
+    
+    if (req.query.date_to) {
+      const dateTo = new Date(req.query.date_to).getTime() / 1000;
+      const dateToEnd = dateTo + (24 * 60 * 60);
+      tickets = tickets.filter(t => {
+        if (!t.assigned_at) return false;
+        return t.assigned_at <= dateToEnd;
+      });
+    }
+    
+    // Get stats with filtered tickets
+    const stats = getSLAStats(tickets);
     res.json({
       success: true,
       stats
