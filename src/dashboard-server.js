@@ -5,7 +5,7 @@
 
 import 'dotenv/config';
 import express from 'express';
-import { getAllSLATickets, getSLAStats } from './sla-monitor-enhanced.js';
+import { getAllSLATickets, getSLAStats, reloadSLAState } from './sla-monitor-enhanced.js';
 import { getStats as getPreferenceStats } from './preferences.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,6 +15,22 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.DASHBOARD_PORT || 3002;
+
+// Reload SLA state periodically to sync with polling service
+// Since dashboard runs as separate process, it needs to reload the file
+const RELOAD_INTERVAL = parseInt(process.env.SLA_STATE_RELOAD_INTERVAL || '10000', 10); // Default 10 seconds
+
+setInterval(async () => {
+  try {
+    const count = await reloadSLAState();
+    // Only log if there are tickets (to avoid spam when empty)
+    if (count > 0) {
+      console.log(`Reloaded SLA state: ${count} tickets`);
+    }
+  } catch (err) {
+    console.error('Error reloading SLA state:', err);
+  }
+}, RELOAD_INTERVAL);
 
 // Serve static files from dashboard directory
 app.use(express.static(path.join(__dirname, '..', 'dashboard')));
@@ -31,8 +47,10 @@ app.use((req, res, next) => {
  * GET /api/sla/tickets
  * Query params: team, status, sla_name
  */
-app.get('/api/sla/tickets', (req, res) => {
+app.get('/api/sla/tickets', async (req, res) => {
   try {
+    // Force reload before getting tickets
+    await reloadSLAState();
     let tickets = getAllSLATickets();
     
     // Filter by status
@@ -83,8 +101,10 @@ app.get('/api/sla/tickets', (req, res) => {
  * API: Get SLA stats
  * GET /api/sla/stats
  */
-app.get('/api/sla/stats', (req, res) => {
+app.get('/api/sla/stats', async (req, res) => {
   try {
+    // Force reload before getting stats
+    await reloadSLAState();
     const stats = getSLAStats();
     res.json({
       success: true,
@@ -92,6 +112,27 @@ app.get('/api/sla/stats', (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching SLA stats:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+/**
+ * API: Reload SLA state manually
+ * GET /api/sla/reload
+ */
+app.get('/api/sla/reload', async (req, res) => {
+  try {
+    const count = await reloadSLAState();
+    res.json({
+      success: true,
+      message: `Reloaded SLA state`,
+      ticketCount: count
+    });
+  } catch (err) {
+    console.error('Error reloading SLA state:', err);
     res.status(500).json({
       success: false,
       error: err.message

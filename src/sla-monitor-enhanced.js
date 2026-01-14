@@ -63,6 +63,15 @@ loadSLAState().catch(err => {
 });
 
 /**
+ * Reload SLA state from file (for dashboard to sync with polling service)
+ * @returns {Promise<number>} - Number of tickets loaded
+ */
+export async function reloadSLAState() {
+  await loadSLAState();
+  return slaStateCache.size;
+}
+
+/**
  * Calculate business hours between two timestamps
  * @param {number} startTimestamp - Start timestamp (seconds)
  * @param {number} endTimestamp - End timestamp (seconds)
@@ -220,13 +229,26 @@ export async function checkSLAStatus(ticket) {
   // Get SLA information
   let slaApplied = ticket.sla_applied;
   
+  // Debug: Log if ticket has linked_objects
+  if (ticket.linked_objects?.data) {
+    console.log(`[SLA Debug] Ticket ${ticketId} has ${ticket.linked_objects.data.length} linked objects`);
+  }
+  
   if (!slaApplied && ticket.linked_objects?.data) {
     for (const linked of ticket.linked_objects.data) {
       if (linked.type === 'conversation' && linked.sla_applied) {
         slaApplied = linked.sla_applied;
+        console.log(`[SLA Debug] Found SLA in linked conversation for ticket ${ticketId}: ${slaApplied.sla_name || 'Unknown'}`);
         break;
       }
     }
+  }
+  
+  // Debug: Log if SLA was found
+  if (slaApplied && slaApplied.sla_status) {
+    console.log(`[SLA Debug] Ticket ${ticketId} has SLA: ${slaApplied.sla_name || 'Unknown'} (status: ${slaApplied.sla_status})`);
+  } else {
+    console.log(`[SLA Debug] Ticket ${ticketId} has no SLA or SLA status is missing`);
   }
   
   if (!slaApplied || !slaApplied.sla_status) {

@@ -5,7 +5,8 @@
 
 import 'dotenv/config';
 import { searchTickets, getAdmin, getTicket } from './tickets.js';
-import { getLastCheckTime, updateLastCheckTime, initializeState } from './state.js';
+import { getConversation } from './intercom.js';
+import { getLastCheckTime, updateLastCheckTime, initializeState, isAssignmentNotified, markAssignmentNotified } from './state.js';
 import { sendTicketAssignmentDM, getTicketLink } from './ticket-notifier.js';
 import { isOptedIn } from './preferences.js';
 import { isBusinessHours, getBusinessHoursConfig, getNextBusinessHoursStart } from './business-hours.js';
@@ -20,14 +21,30 @@ const INTERCOM_ACCESS_TOKEN = process.env.INTERCOM_ACCESS_TOKEN || process.env.I
 const processedAssignments = new Set();
 
 /**
- * Generate a unique key for an assignment
- * @param {string} ticketId - Ticket ID
- * @param {string} assigneeId - Assignee ID
- * @param {number} assignedAt - Assignment timestamp
- * @returns {string} - Unique key
+ * Get the actual assignment timestamp from ticket
+ * Uses statistics.first_assignment_at or statistics.last_assignment_at if available
+ * Falls back to updated_at if admin_assignee_id exists
+ * @param {Object} ticket - Ticket object
+ * @returns {number|null} - Assignment timestamp in seconds, or null
  */
-function getAssignmentKey(ticketId, assigneeId, assignedAt) {
-  return `${ticketId}:${assigneeId}:${assignedAt}`;
+function getAssignmentTimestamp(ticket) {
+  // Try statistics.first_assignment_at (most accurate for initial assignment)
+  if (ticket.statistics?.first_assignment_at) {
+    return ticket.statistics.first_assignment_at;
+  }
+  
+  // Try statistics.last_assignment_at (for reassignments)
+  if (ticket.statistics?.last_assignment_at) {
+    return ticket.statistics.last_assignment_at;
+  }
+  
+  // Fallback to updated_at if admin_assignee_id exists
+  // This is less accurate but better than nothing
+  if (ticket.admin_assignee_id && ticket.updated_at) {
+    return ticket.updated_at;
+  }
+  
+  return null;
 }
 
 /**
@@ -45,14 +62,41 @@ async function processTicket(ticket, lastCheckTime) {
     return false;
   }
 
+  // Get the actual assignment timestamp (not just updated_at)
+  let assignmentTimestamp = getAssignmentTimestamp(ticket);
+  
+  // If statistics are not available in search results, fetch full ticket details
+  // This ensures we get accurate assignment timestamps and avoid false positives
+  if (!assignmentTimestamp && ticketId) {
+    try {
+      const fullTicket = await getTicket(ticketId);
+      assignmentTimestamp = getAssignmentTimestamp(fullTicket);
+      // Merge statistics into ticket object for later use
+      if (fullTicket.statistics) {
+        ticket.statistics = fullTicket.statistics;
+      }
+    } catch (err) {
+      console.error(`Failed to fetch full ticket ${ticketId} for assignment timestamp:`, err.message);
+      // Fall through to use updated_at as last resort
+    }
+  }
+  
+  // If we still can't determine assignment timestamp, use updated_at as fallback
+  // but only if admin_assignee_id exists (indicating it's actually assigned)
+  if (!assignmentTimestamp && ticket.admin_assignee_id && ticket.updated_at) {
+    assignmentTimestamp = ticket.updated_at;
+  }
+  
+  // If we can't determine assignment timestamp at all, skip
+  // This prevents false positives from tickets that were updated for other reasons
+  if (!assignmentTimestamp) {
+    return false;
+  }
+
   // Check if ticket was created or updated after last check
   // Note: We search by created_at, but also check updated_at to catch reassignments
   const createdAt = ticket.created_at || 0;
   const updatedAt = ticket.updated_at || createdAt;
-  
-  // Use the later of created_at or updated_at to catch assignments
-  // This ensures we catch tickets that were assigned after our last check
-  const relevantTimestamp = Math.max(createdAt, updatedAt);
 
   // Skip if ticket is older than our last check
   // Since we search by created_at >= lastCheckTime, this is mainly for updated_at checks
@@ -60,15 +104,21 @@ async function processTicket(ticket, lastCheckTime) {
     return false;
   }
 
-  // Generate assignment key for deduplication
-  const assignmentKey = getAssignmentKey(ticketId, adminAssigneeId, relevantTimestamp);
-  
-  if (processedAssignments.has(assignmentKey)) {
-    console.log(`Skipping duplicate assignment: ${assignmentKey}`);
+  // Check if this assignment has already been notified (persistent check)
+  const alreadyNotified = await isAssignmentNotified(ticketId, adminAssigneeId, assignmentTimestamp);
+  if (alreadyNotified) {
+    console.log(`Skipping duplicate assignment: ${ticketId}:${adminAssigneeId}:${assignmentTimestamp} (already notified)`);
     return false;
   }
 
-  // Mark as processed
+  // Check for duplicates within this polling cycle
+  const assignmentKey = `${ticketId}:${adminAssigneeId}:${assignmentTimestamp}`;
+  if (processedAssignments.has(assignmentKey)) {
+    console.log(`Skipping duplicate assignment: ${assignmentKey} (within same poll cycle)`);
+    return false;
+  }
+
+  // Mark as processed in this cycle
   processedAssignments.add(assignmentKey);
 
   try {
@@ -110,6 +160,8 @@ async function processTicket(ticket, lastCheckTime) {
     const result = await sendTicketAssignmentDM(assigneeEmail, ticket, ticketLink);
 
     if (result.success) {
+      // Mark as notified in persistent state
+      await markAssignmentNotified(ticketId, adminAssigneeId, assignmentTimestamp);
       console.log(`✅ Sent notification for ticket ${ticketId} assigned to ${assigneeEmail}`);
       return true;
     } else {
@@ -189,6 +241,23 @@ async function poll() {
             fullTicket.admin_assignee = ticket.admin_assignee;
           }
           
+          // If ticket doesn't have SLA, try fetching the conversation
+          // (tickets created from conversations may have SLA on the conversation)
+          if (!fullTicket.sla_applied && (!fullTicket.linked_objects?.data || fullTicket.linked_objects.data.length === 0)) {
+            try {
+              // Try fetching as conversation (ticket ID might be conversation ID)
+              const conversation = await getConversation(ticket.id);
+              if (conversation.sla_applied) {
+                // Merge SLA from conversation into ticket
+                fullTicket.sla_applied = conversation.sla_applied;
+                console.log(`[SLA] Found SLA on conversation for ticket ${ticket.id}: ${conversation.sla_applied.sla_name || 'Unknown'}`);
+              }
+            } catch (convErr) {
+              // Not a conversation or conversation fetch failed - that's okay
+              // We'll proceed with ticket data only
+            }
+          }
+          
           const slaResult = await checkSLAStatus(fullTicket);
           if (slaResult.alerted) {
             slaAlertsSent++;
@@ -221,7 +290,8 @@ async function poll() {
     }
     console.log(`Next poll in ${CHECK_INTERVAL / 1000} seconds`);
 
-    // Clear processed assignments set (keep it small)
+    // Clear processed assignments set periodically (keep it small for in-memory deduplication)
+    // Note: Persistent deduplication is handled by state.js
     if (processedAssignments.size > 1000) {
       processedAssignments.clear();
     }
