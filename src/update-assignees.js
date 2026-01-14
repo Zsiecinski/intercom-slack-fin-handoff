@@ -58,6 +58,7 @@ async function updateAssignees() {
       
       try {
         // Fetch ticket to get current info
+        console.log(`\n📋 Processing ticket ${ticketId}...`);
         const ticket = await getTicket(ticketId);
         
         // Update assignee info if missing
@@ -72,57 +73,64 @@ async function updateAssignees() {
           }
         }
         
-        // Update tags if missing (tags are on conversations, not tickets)
-        if (!ticketState.tags || ticketState.tags.length === 0) {
-          let tags = [];
-          
-          // Check linked conversations for tags
-          if (ticket.linked_objects?.data) {
-            for (const linked of ticket.linked_objects.data) {
-              if (linked.type === 'conversation') {
-                try {
-                  const conversation = await getConversation(linked.id);
-                  // Tags are on the conversation object
-                  if (conversation.tags && Array.isArray(conversation.tags)) {
-                    tags = tags.concat(conversation.tags);
-                  }
-                } catch (convErr) {
-                  // Conversation fetch failed - continue
+        // Always update tags from conversations (tags are on conversations, not tickets)
+        // Force update even if tags already exist, since we might have missed conversation tags before
+        let tags = [];
+        
+        // Check linked conversations for tags
+        if (ticket.linked_objects?.data) {
+          for (const linked of ticket.linked_objects.data) {
+            if (linked.type === 'conversation') {
+              try {
+                const conversation = await getConversation(linked.id);
+                // Tags are on the conversation object
+                if (conversation.tags && Array.isArray(conversation.tags)) {
+                  tags = tags.concat(conversation.tags);
+                  console.log(`   Found ${conversation.tags.length} tag(s) on linked conversation ${linked.id}`);
                 }
+              } catch (convErr) {
+                // Conversation fetch failed - continue
+                console.log(`   ⚠️  Could not fetch conversation ${linked.id}: ${convErr.message}`);
               }
             }
           }
-          
-          // If no linked conversations found, try fetching ticket ID as conversation
-          // (tickets created from conversations may use conversation ID as ticket ID)
-          if (tags.length === 0) {
-            try {
-              const conversation = await getConversation(ticketId);
-              if (conversation.tags && Array.isArray(conversation.tags)) {
-                tags = conversation.tags;
-              }
-            } catch (convErr) {
-              // Not a conversation or conversation fetch failed - that's okay
+        }
+        
+        // If no linked conversations found, try fetching ticket ID as conversation
+        // (tickets created from conversations may use conversation ID as ticket ID)
+        if (tags.length === 0) {
+          try {
+            const conversation = await getConversation(ticketId);
+            if (conversation.tags && Array.isArray(conversation.tags)) {
+              tags = conversation.tags;
+              console.log(`   Found ${tags.length} tag(s) on conversation ${ticketId}`);
             }
+          } catch (convErr) {
+            // Not a conversation or conversation fetch failed - that's okay
           }
-          
-          // Convert tags to array of strings
-          const tagNames = tags.map(tag => {
-            return typeof tag === 'string' ? tag : (tag.name || tag.id || '');
-          }).filter(tag => tag); // Remove empty strings
-          
-          if (tagNames.length > 0) {
-            ticketState.tags = tagNames;
-            ticketState.has_unwarranted_tag = tagNames.some(tagName => 
-              tagName.toLowerCase().includes('unwarranted sla')
-            );
-            tagsUpdated++;
-            needsUpdate = true;
-            if (ticketState.has_unwarranted_tag) {
-              console.log(`🏷️  Ticket ${ticketId}: Found "unwarranted sla" tag`);
-            } else {
-              console.log(`🏷️  Ticket ${ticketId}: Found ${tagNames.length} tag(s)`);
-            }
+        }
+        
+        // Convert tags to array of strings
+        const tagNames = tags.map(tag => {
+          return typeof tag === 'string' ? tag : (tag.name || tag.id || '');
+        }).filter(tag => tag); // Remove empty strings
+        
+        // Always update tags (even if empty) to ensure we have the latest state
+        const previousTagCount = ticketState.tags?.length || 0;
+        ticketState.tags = tagNames;
+        ticketState.has_unwarranted_tag = tagNames.some(tagName => 
+          tagName.toLowerCase().includes('unwarranted sla')
+        );
+        
+        if (tagNames.length > 0 || previousTagCount !== tagNames.length) {
+          tagsUpdated++;
+          needsUpdate = true;
+          if (ticketState.has_unwarranted_tag) {
+            console.log(`🏷️  Ticket ${ticketId}: Found "unwarranted sla" tag`);
+          } else if (tagNames.length > 0) {
+            console.log(`🏷️  Ticket ${ticketId}: Found ${tagNames.length} tag(s)`);
+          } else {
+            console.log(`🏷️  Ticket ${ticketId}: No tags found`);
           }
         }
         
