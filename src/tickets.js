@@ -83,23 +83,64 @@ export async function searchTickets(sinceTimestamp, options = {}) {
     // Intercom API v2.11 returns tickets in data._results or data.tickets
     let tickets = data._results || data.tickets || data.data || [];
     
+    // Debug: Log pagination info
+    console.log(`📄 Pagination info:`, {
+      hasPages: !!data.pages,
+      pagesType: typeof data.pages,
+      pagesKeys: data.pages ? Object.keys(data.pages) : [],
+      nextPage: data.pages?.next,
+      totalCount: data.total_count,
+      ticketsInPage: tickets.length
+    });
+    
     // Handle pagination if there are more results
+    // Intercom API v2.11 uses cursor-based pagination with pages.next
     let nextPage = data.pages?.next;
     let pageCount = 1;
     
-    while (nextPage && tickets.length < 1000) { // Limit to 1000 tickets max to avoid infinite loops
+    // Also check for cursor-based pagination (starting_after)
+    let startingAfter = data.pages?.next?.starting_after;
+    
+    while ((nextPage || startingAfter) && tickets.length < 1000) { // Limit to 1000 tickets max to avoid infinite loops
       try {
-        const nextResponse = await fetch(nextPage.url, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${INTERCOM_ACCESS_TOKEN}`,
-            'Accept': 'application/json',
-            'Intercom-Version': '2.11'
-          }
-        });
+        let nextResponse;
+        
+        if (nextPage?.url) {
+          // Use the URL from pages.next
+          nextResponse = await fetch(nextPage.url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${INTERCOM_ACCESS_TOKEN}`,
+              'Accept': 'application/json',
+              'Intercom-Version': '2.11'
+            }
+          });
+        } else if (startingAfter) {
+          // Use cursor-based pagination
+          const nextQuery = {
+            ...query,
+            pagination: {
+              ...query.pagination,
+              starting_after: startingAfter
+            }
+          };
+          nextResponse = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${INTERCOM_ACCESS_TOKEN}`,
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Intercom-Version': '2.11'
+            },
+            body: JSON.stringify(nextQuery)
+          });
+        } else {
+          break;
+        }
         
         if (!nextResponse.ok) {
-          console.warn(`Failed to fetch next page: ${nextResponse.status}`);
+          const errorText = await nextResponse.text();
+          console.warn(`Failed to fetch next page: ${nextResponse.status} - ${errorText}`);
           break;
         }
         
@@ -108,8 +149,9 @@ export async function searchTickets(sinceTimestamp, options = {}) {
         tickets = tickets.concat(nextTickets);
         pageCount++;
         nextPage = nextData.pages?.next;
+        startingAfter = nextData.pages?.next?.starting_after;
         
-        console.log(`Fetched page ${pageCount}: ${nextTickets.length} tickets (total: ${tickets.length})`);
+        console.log(`📄 Fetched page ${pageCount}: ${nextTickets.length} tickets (total: ${tickets.length})`);
       } catch (err) {
         console.error('Error fetching next page:', err);
         break;
