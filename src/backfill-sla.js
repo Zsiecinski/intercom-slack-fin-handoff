@@ -8,7 +8,7 @@
 import 'dotenv/config';
 import { searchTickets, getTicket, getAdmin } from './tickets.js';
 import { getConversation } from './intercom.js';
-import { checkSLAStatus } from './sla-monitor-enhanced.js';
+import { checkSLAStatus, trackAssignment } from './sla-monitor-enhanced.js';
 import { initializeState } from './state.js';
 
 const hoursBack = parseInt(process.argv[2] || '24', 10);
@@ -156,6 +156,9 @@ async function backfillSLA() {
         if (conversationTags.length > 0) {
           fullTicket.tags = conversationTags;
         }
+        
+        // Track all assignments (not just SLA tickets)
+        await trackAssignment(fullTicket);
         
         // Track tickets by assignee for reporting
         const assigneeName = fullTicket.admin_assignee?.name || 'Unassigned';

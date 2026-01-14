@@ -10,7 +10,7 @@ import { getLastCheckTime, updateLastCheckTime, initializeState, isAssignmentNot
 import { sendTicketAssignmentDM, getTicketLink } from './ticket-notifier.js';
 import { isOptedIn } from './preferences.js';
 import { isBusinessHours, getBusinessHoursConfig, getNextBusinessHoursStart } from './business-hours.js';
-import { checkSLAStatus } from './sla-monitor-enhanced.js';
+import { checkSLAStatus, trackAssignment } from './sla-monitor-enhanced.js';
 
 // Default to 30 seconds for short SLAs (5 minutes)
 // This ensures we catch violations before they occur
@@ -230,6 +230,17 @@ async function poll() {
         notificationsSent++;
       }
 
+      // Track all assignments (not just SLA tickets)
+      if (ticket.id && ticket.admin_assignee_id) {
+        try {
+          // Track assignment - this records ALL tickets, not just SLA ones
+          await trackAssignment(ticket);
+        } catch (trackErr) {
+          // Tracking failed - continue
+          console.error(`Failed to track assignment for ticket ${ticket.id}:`, trackErr.message);
+        }
+      }
+
       // Check SLA status with enhanced monitoring
       // Note: SLA info might be in linked conversation, so we fetch full ticket details
       // to get complete information including linked_objects and statistics
@@ -255,6 +266,11 @@ async function poll() {
             } catch (adminErr) {
               // Admin fetch failed - continue without assignee info
             }
+          }
+          
+          // Update assignment tracking with full ticket info
+          if (fullTicket.admin_assignee) {
+            await trackAssignment(fullTicket);
           }
           
           // Fetch tags from linked conversations (tags are on conversations, not tickets)

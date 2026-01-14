@@ -17,10 +17,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const SLA_STATE_FILE = path.join(__dirname, '..', 'sla-state.json');
+const ASSIGNMENT_TRACKING_FILE = path.join(__dirname, '..', 'assignment-tracking.json');
 const SLA_CHANNEL = process.env.SLA_ALERT_CHANNEL;
 
 // In-memory cache: ticketId -> SLA tracking data
 const slaStateCache = new Map();
+
+// In-memory cache: ticketId -> assignment tracking data (all tickets, not just SLA)
+const assignmentTrackingCache = new Map();
 
 /**
  * Load SLA state from file
@@ -57,9 +61,86 @@ async function saveSLAState() {
   }
 }
 
+/**
+ * Load assignment tracking from file
+ */
+async function loadAssignmentTracking() {
+  try {
+    const data = await fs.readFile(ASSIGNMENT_TRACKING_FILE, 'utf-8');
+    const tracking = JSON.parse(data);
+    
+    assignmentTrackingCache.clear();
+    for (const [ticketId, assignmentInfo] of Object.entries(tracking)) {
+      assignmentTrackingCache.set(ticketId, assignmentInfo);
+    }
+    
+    console.log(`Loaded assignment tracking for ${assignmentTrackingCache.size} tickets`);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      console.log('No assignment tracking file found, starting fresh');
+    } else {
+      console.error('Error loading assignment tracking:', err);
+    }
+  }
+}
+
+/**
+ * Save assignment tracking to file
+ */
+async function saveAssignmentTracking() {
+  try {
+    const tracking = {};
+    for (const [ticketId, assignmentInfo] of assignmentTrackingCache.entries()) {
+      tracking[ticketId] = assignmentInfo;
+    }
+    await fs.writeFile(ASSIGNMENT_TRACKING_FILE, JSON.stringify(tracking, null, 2));
+  } catch (err) {
+    console.error('Error saving assignment tracking:', err);
+  }
+}
+
+/**
+ * Track a ticket assignment (all tickets, not just SLA)
+ * @param {Object} ticket - Ticket object
+ */
+export async function trackAssignment(ticket) {
+  const ticketId = ticket.id || ticket.ticket_id;
+  if (!ticketId) return;
+  
+  const assigneeName = ticket.admin_assignee?.name || null;
+  const assigneeEmail = ticket.admin_assignee?.email || null;
+  const assignedAt = ticket.statistics?.first_assignment_at || 
+                     ticket.statistics?.last_assignment_at || 
+                     ticket.updated_at || 
+                     null;
+  
+  if (!assignedAt) return; // Can't track without assignment timestamp
+  
+  // Check if already tracked
+  const existing = assignmentTrackingCache.get(ticketId);
+  if (existing && existing.assigned_at === assignedAt) {
+    return; // Already tracked
+  }
+  
+  assignmentTrackingCache.set(ticketId, {
+    ticket_id: ticketId,
+    assignee_name: assigneeName,
+    assignee_email: assigneeEmail,
+    assigned_at: assignedAt,
+    ticket_created_at: ticket.created_at || null,
+    tracked_at: Math.floor(Date.now() / 1000)
+  });
+  
+  await saveAssignmentTracking();
+}
+
 // Load state on startup
 loadSLAState().catch(err => {
   console.error('Failed to load SLA state on startup:', err);
+});
+
+loadAssignmentTracking().catch(err => {
+  console.error('Failed to load assignment tracking on startup:', err);
 });
 
 /**
@@ -68,6 +149,7 @@ loadSLAState().catch(err => {
  */
 export async function reloadSLAState() {
   await loadSLAState();
+  await loadAssignmentTracking();
   return slaStateCache.size;
 }
 
@@ -633,12 +715,32 @@ export function getSLAStats(filteredTickets = null) {
     : null;
   
   // Agent performance breakdown
+  // First, count all assignments (from assignment tracking)
+  const allAssignmentsByAgent = {};
+  for (const [ticketId, assignment] of assignmentTrackingCache.entries()) {
+    if (!assignment.assignee_name) continue;
+    const agent = assignment.assignee_name;
+    if (!allAssignmentsByAgent[agent]) {
+      allAssignmentsByAgent[agent] = 0;
+    }
+    allAssignmentsByAgent[agent]++;
+  }
+  
+  // Then, count SLA tickets
   const agentStats = {};
   tickets.forEach(ticket => {
     if (!ticket.assignee_name) return;
     const agent = ticket.assignee_name;
     if (!agentStats[agent]) {
-      agentStats[agent] = { total: 0, hit: 0, missed: 0, active: 0, overdue: 0, unwarranted: 0 };
+      agentStats[agent] = { 
+        total: 0, 
+        total_assignments: allAssignmentsByAgent[agent] || 0,
+        hit: 0, 
+        missed: 0, 
+        active: 0, 
+        overdue: 0, 
+        unwarranted: 0 
+      };
     }
     agentStats[agent].total++;
     if (ticket.sla_status === 'hit') agentStats[agent].hit++;
@@ -647,6 +749,23 @@ export function getSLAStats(filteredTickets = null) {
     if (ticket.is_overdue) agentStats[agent].overdue++;
     if (ticket.has_unwarranted_tag) agentStats[agent].unwarranted++;
   });
+  
+  // Add total_assignments for agents that have assignments but no SLA tickets
+  for (const [agent, totalAssignments] of Object.entries(allAssignmentsByAgent)) {
+    if (!agentStats[agent]) {
+      agentStats[agent] = { 
+        total: 0, 
+        total_assignments: totalAssignments,
+        hit: 0, 
+        missed: 0, 
+        active: 0, 
+        overdue: 0, 
+        unwarranted: 0 
+      };
+    } else {
+      agentStats[agent].total_assignments = totalAssignments;
+    }
+  }
   
   // SLA type breakdown
   const slaTypeStats = {};
