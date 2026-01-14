@@ -322,11 +322,12 @@
                         <th>Hit</th>
                         <th>Missed</th>
                         <th>Active</th>
+                        <th>Unwarranted</th>
                         <th>Hit Rate</th>
                     </tr>
                 </thead>
                 <tbody id="agentStatsBody">
-                    <tr><td colspan="6" class="loading">Loading...</td></tr>
+                    <tr><td colspan="7" class="loading">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -415,13 +416,15 @@
         function renderAgentStats(agentStats) {
             const tbody = document.getElementById('agentStatsBody');
             if (!agentStats || Object.keys(agentStats).length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="loading">No agent data</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="loading">No agent data</td></tr>';
                 return;
             }
             
             const agents = Object.entries(agentStats)
                 .map(([name, stats]) => {
-                    const hitRate = stats.total > 0 ? ((stats.hit / stats.total) * 100).toFixed(1) : 0;
+                    // Calculate hit rate excluding unwarranted tickets
+                    const validTotal = stats.total - (stats.unwarranted || 0);
+                    const hitRate = validTotal > 0 ? ((stats.hit / validTotal) * 100).toFixed(1) : 0;
                     return { name, ...stats, hitRate: parseFloat(hitRate) };
                 })
                 .sort((a, b) => b.total - a.total); // Sort by total descending
@@ -433,6 +436,7 @@
                     <td style="color: #34d399;">${agent.hit}</td>
                     <td style="color: #fbbf24;">${agent.missed}</td>
                     <td style="color: #60a5fa;">${agent.active}</td>
+                    <td style="color: ${agent.unwarranted > 0 ? '#fbbf24' : '#64748b'};">${agent.unwarranted || 0}</td>
                     <td style="font-weight: bold; color: ${agent.hitRate >= 80 ? '#34d399' : agent.hitRate >= 60 ? '#fbbf24' : '#f87171'}">${agent.hitRate}%</td>
                 </tr>
             `).join('');

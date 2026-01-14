@@ -633,13 +633,14 @@ export function getSLAStats() {
     if (!ticket.assignee_name) return;
     const agent = ticket.assignee_name;
     if (!agentStats[agent]) {
-      agentStats[agent] = { total: 0, hit: 0, missed: 0, active: 0, overdue: 0 };
+      agentStats[agent] = { total: 0, hit: 0, missed: 0, active: 0, overdue: 0, unwarranted: 0 };
     }
     agentStats[agent].total++;
     if (ticket.sla_status === 'hit') agentStats[agent].hit++;
     if (ticket.sla_status === 'missed') agentStats[agent].missed++;
     if (ticket.sla_status === 'active') agentStats[agent].active++;
     if (ticket.is_overdue) agentStats[agent].overdue++;
+    if (ticket.has_unwarranted_tag) agentStats[agent].unwarranted++;
   });
   
   // SLA type breakdown
