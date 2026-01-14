@@ -85,6 +85,25 @@ app.get('/api/sla/tickets', async (req, res) => {
       });
     }
     
+    // Filter by date range (based on assigned_at timestamp)
+    if (req.query.date_from) {
+      const dateFrom = new Date(req.query.date_from).getTime() / 1000; // Convert to Unix timestamp
+      tickets = tickets.filter(t => {
+        if (!t.assigned_at) return false;
+        return t.assigned_at >= dateFrom;
+      });
+    }
+    
+    if (req.query.date_to) {
+      const dateTo = new Date(req.query.date_to).getTime() / 1000; // Convert to Unix timestamp
+      // Add 24 hours to include the entire end date
+      const dateToEnd = dateTo + (24 * 60 * 60);
+      tickets = tickets.filter(t => {
+        if (!t.assigned_at) return false;
+        return t.assigned_at <= dateToEnd;
+      });
+    }
+    
     // Sort options
     const sortBy = req.query.sort || 'deadline';
     if (sortBy === 'deadline') {

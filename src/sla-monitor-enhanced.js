@@ -648,12 +648,13 @@ export function getSLAStats() {
   tickets.forEach(ticket => {
     const slaName = ticket.sla_name;
     if (!slaTypeStats[slaName]) {
-      slaTypeStats[slaName] = { total: 0, hit: 0, missed: 0, active: 0 };
+      slaTypeStats[slaName] = { total: 0, hit: 0, missed: 0, active: 0, unwarranted: 0 };
     }
     slaTypeStats[slaName].total++;
     if (ticket.sla_status === 'hit') slaTypeStats[slaName].hit++;
     if (ticket.sla_status === 'missed') slaTypeStats[slaName].missed++;
     if (ticket.sla_status === 'active') slaTypeStats[slaName].active++;
+    if (ticket.has_unwarranted_tag) slaTypeStats[slaName].unwarranted++;
   });
   
   return {
