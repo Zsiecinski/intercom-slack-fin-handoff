@@ -82,12 +82,22 @@ async function updateAssignees() {
           for (const linked of ticket.linked_objects.data) {
             if (linked.type === 'conversation') {
               try {
-                const conversation = await getConversation(linked.id);
-                // Tags are on the conversation object
-                if (conversation.tags && Array.isArray(conversation.tags)) {
-                  tags = tags.concat(conversation.tags);
-                  console.log(`   Found ${conversation.tags.length} tag(s) on linked conversation ${linked.id}`);
-                }
+                  const conversation = await getConversation(linked.id);
+                  // Tags are on the conversation object, may be nested in conversation.tags.tags
+                  let convTags = [];
+                  if (conversation.tags) {
+                    if (Array.isArray(conversation.tags)) {
+                      convTags = conversation.tags;
+                    } else if (conversation.tags.tags && Array.isArray(conversation.tags.tags)) {
+                      convTags = conversation.tags.tags;
+                    } else if (conversation.tags.data && Array.isArray(conversation.tags.data)) {
+                      convTags = conversation.tags.data;
+                    }
+                  }
+                  if (convTags.length > 0) {
+                    tags = tags.concat(convTags);
+                    console.log(`   Found ${convTags.length} tag(s) on linked conversation ${linked.id}`);
+                  }
               } catch (convErr) {
                 // Conversation fetch failed - continue
                 console.log(`   ⚠️  Could not fetch conversation ${linked.id}: ${convErr.message}`);
@@ -101,9 +111,18 @@ async function updateAssignees() {
         if (tags.length === 0) {
           try {
             const conversation = await getConversation(ticketId);
-            if (conversation.tags && Array.isArray(conversation.tags)) {
-              tags = conversation.tags;
-              console.log(`   Found ${tags.length} tag(s) on conversation ${ticketId}`);
+            // Tags may be nested in conversation.tags.tags
+            if (conversation.tags) {
+              if (Array.isArray(conversation.tags)) {
+                tags = conversation.tags;
+              } else if (conversation.tags.tags && Array.isArray(conversation.tags.tags)) {
+                tags = conversation.tags.tags;
+              } else if (conversation.tags.data && Array.isArray(conversation.tags.data)) {
+                tags = conversation.tags.data;
+              }
+              if (tags.length > 0) {
+                console.log(`   Found ${tags.length} tag(s) on conversation ${ticketId}`);
+              }
             }
           } catch (convErr) {
             // Not a conversation or conversation fetch failed - that's okay

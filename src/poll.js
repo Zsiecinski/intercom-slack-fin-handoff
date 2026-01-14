@@ -264,9 +264,19 @@ async function poll() {
               if (linked.type === 'conversation') {
                 try {
                   const conversation = await getConversation(linked.id);
-                  // Tags are on the conversation object
-                  if (conversation.tags && Array.isArray(conversation.tags)) {
-                    conversationTags = conversationTags.concat(conversation.tags);
+                  // Tags are on the conversation object, may be nested in conversation.tags.tags
+                  let convTags = [];
+                  if (conversation.tags) {
+                    if (Array.isArray(conversation.tags)) {
+                      convTags = conversation.tags;
+                    } else if (conversation.tags.tags && Array.isArray(conversation.tags.tags)) {
+                      convTags = conversation.tags.tags;
+                    } else if (conversation.tags.data && Array.isArray(conversation.tags.data)) {
+                      convTags = conversation.tags.data;
+                    }
+                  }
+                  if (convTags.length > 0) {
+                    conversationTags = conversationTags.concat(convTags);
                   }
                   // Also merge SLA if ticket doesn't have it
                   if (!fullTicket.sla_applied && conversation.sla_applied) {
@@ -285,8 +295,15 @@ async function poll() {
           if (conversationTags.length === 0 && (!fullTicket.sla_applied || !fullTicket.linked_objects?.data || fullTicket.linked_objects.data.length === 0)) {
             try {
               const conversation = await getConversation(ticket.id);
-              if (conversation.tags && Array.isArray(conversation.tags)) {
-                conversationTags = conversation.tags;
+              // Tags may be nested in conversation.tags.tags
+              if (conversation.tags) {
+                if (Array.isArray(conversation.tags)) {
+                  conversationTags = conversation.tags;
+                } else if (conversation.tags.tags && Array.isArray(conversation.tags.tags)) {
+                  conversationTags = conversation.tags.tags;
+                } else if (conversation.tags.data && Array.isArray(conversation.tags.data)) {
+                  conversationTags = conversation.tags.data;
+                }
               }
               if (conversation.sla_applied) {
                 fullTicket.sla_applied = conversation.sla_applied;

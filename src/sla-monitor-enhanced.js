@@ -237,17 +237,31 @@ function hasUnwarrantedSLATag(ticket) {
 
 /**
  * Get ticket tags as array of strings
- * @param {Object} ticket - Ticket object
+ * Tags can be on conversations, and may be in nested structure (tags.tags)
+ * @param {Object} ticket - Ticket object (may be ticket or conversation)
  * @returns {Array<string>} - Array of tag names
  */
 function getTicketTags(ticket) {
-  const tags = ticket.tags || ticket.tag_list || [];
+  let tags = ticket.tags || ticket.tag_list || [];
+  
+  // Handle nested structure: tags.tags (common in conversation API responses)
+  if (tags && typeof tags === 'object' && !Array.isArray(tags)) {
+    if (tags.tags && Array.isArray(tags.tags)) {
+      tags = tags.tags;
+    } else if (tags.data && Array.isArray(tags.data)) {
+      tags = tags.data;
+    } else {
+      tags = [];
+    }
+  }
+  
   if (!Array.isArray(tags)) {
     return [];
   }
+  
   return tags.map(tag => {
     return typeof tag === 'string' ? tag : (tag.name || tag.id || '');
-  });
+  }).filter(tag => tag); // Remove empty strings
 }
 
 /**
@@ -481,7 +495,36 @@ function generateSLAAlertBlocks(ticket, slaApplied, ticketLink, violationType, d
             emoji: true
           },
           url: ticketLink,
+          action_id: 'open_intercom',
           style: 'danger'
+        },
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: '🔕 Stop notifications',
+            emoji: true
+          },
+          action_id: 'opt_out',
+          style: 'danger',
+          confirm: {
+            title: {
+              type: 'plain_text',
+              text: 'Stop notifications?'
+            },
+            text: {
+              type: 'mrkdwn',
+              text: 'You won\'t receive SLA violation notifications. You can opt back in anytime with `/cx-alerts opt-in`.'
+            },
+            confirm: {
+              type: 'plain_text',
+              text: 'Stop notifications'
+            },
+            deny: {
+              type: 'plain_text',
+              text: 'Cancel'
+            }
+          }
         }
       ]
     }
