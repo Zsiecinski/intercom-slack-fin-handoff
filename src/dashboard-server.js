@@ -65,6 +65,26 @@ app.get('/api/sla/tickets', async (req, res) => {
       );
     }
     
+    // Filter by unwarranted tag
+    if (req.query.unwarranted === 'true') {
+      tickets = tickets.filter(t => t.has_unwarranted_tag === true);
+    } else if (req.query.unwarranted === 'false') {
+      tickets = tickets.filter(t => !t.has_unwarranted_tag);
+    }
+    
+    // Filter by assignee
+    if (req.query.assignee) {
+      tickets = tickets.filter(t => t.assignee_name === req.query.assignee);
+    }
+    
+    // Filter by ticket state
+    if (req.query.ticket_state) {
+      tickets = tickets.filter(t => {
+        const state = (t.ticket_state || '').toLowerCase();
+        return state === req.query.ticket_state.toLowerCase();
+      });
+    }
+    
     // Sort options
     const sortBy = req.query.sort || 'deadline';
     if (sortBy === 'deadline') {
@@ -80,6 +100,16 @@ app.get('/api/sla/tickets', async (req, res) => {
         if (a.remaining_seconds === null) return 1;
         if (b.remaining_seconds === null) return -1;
         return a.remaining_seconds - b.remaining_seconds;
+      });
+    } else if (sortBy === 'assignee') {
+      tickets.sort((a, b) => {
+        const nameA = a.assignee_name || 'ZZZ';
+        const nameB = b.assignee_name || 'ZZZ';
+        return nameA.localeCompare(nameB);
+      });
+    } else if (sortBy === 'sla_name') {
+      tickets.sort((a, b) => {
+        return (a.sla_name || '').localeCompare(b.sla_name || '');
       });
     }
     

@@ -201,6 +201,16 @@
             padding: 40px;
             color: #94a3b8;
         }
+
+        h3 {
+            color: #e2e8f0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .table-container h3 {
+            background: #0f172a;
+        }
     </style>
 </head>
 <body>
@@ -237,6 +247,18 @@
             <div class="stat-label">Hit</div>
         </div>
         <div class="stat-card">
+            <div class="stat-value" id="statHitRate">-</div>
+            <div class="stat-label">Hit Rate %</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="statAvgResponse">-</div>
+            <div class="stat-label">Avg Response (min)</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="statUnwarranted">-</div>
+            <div class="stat-label">Unwarranted</div>
+        </div>
+        <div class="stat-card">
             <div class="stat-value" id="statTotal">-</div>
             <div class="stat-label">Total Tracked</div>
         </div>
@@ -257,31 +279,97 @@
             <input type="text" id="filterSlaName" placeholder="Filter by SLA name" onchange="loadData()">
         </div>
         <div class="control-group">
+            <label>Unwarranted:</label>
+            <select id="filterUnwarranted" onchange="loadData()">
+                <option value="">All</option>
+                <option value="true">Unwarranted Only</option>
+                <option value="false">Exclude Unwarranted</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Assignee:</label>
+            <select id="filterAssignee" onchange="loadData()">
+                <option value="">All</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Ticket State:</label>
+            <select id="filterTicketState" onchange="loadData()">
+                <option value="">All</option>
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+            </select>
+        </div>
+        <div class="control-group">
             <label>Sort by:</label>
             <select id="sortBy" onchange="loadData()">
                 <option value="deadline">Next SLA Target</option>
                 <option value="remaining">Remaining Time</option>
+                <option value="assignee">Assignee</option>
+                <option value="sla_name">SLA Name</option>
             </select>
         </div>
     </div>
 
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+        <div class="table-container">
+            <h3 style="padding: 15px; margin: 0; border-bottom: 1px solid #334155;">Agent Performance</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Agent</th>
+                        <th>Total</th>
+                        <th>Hit</th>
+                        <th>Missed</th>
+                        <th>Active</th>
+                        <th>Hit Rate</th>
+                    </tr>
+                </thead>
+                <tbody id="agentStatsBody">
+                    <tr><td colspan="6" class="loading">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="table-container">
+            <h3 style="padding: 15px; margin: 0; border-bottom: 1px solid #334155;">SLA Type Breakdown</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>SLA Name</th>
+                        <th>Total</th>
+                        <th>Hit</th>
+                        <th>Missed</th>
+                        <th>Active</th>
+                        <th>Hit Rate</th>
+                    </tr>
+                </thead>
+                <tbody id="slaTypeStatsBody">
+                    <tr><td colspan="6" class="loading">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="table-container">
+        <h3 style="padding: 15px; margin: 0; border-bottom: 1px solid #334155;">SLA Tickets</h3>
         <table>
             <thead>
                 <tr>
                     <th>Ticket ID</th>
+                    <th>Subject</th>
                     <th>SLA Name</th>
                     <th>Status</th>
                     <th>Assignee</th>
-                    <th>Assigned At</th>
-                    <th>Deadline</th>
+                    <th>Time Since Assignment</th>
+                    <th>Progress</th>
                     <th>Remaining</th>
+                    <th>Ticket State</th>
                     <th>Alerts</th>
                 </tr>
             </thead>
             <tbody id="ticketsTableBody">
                 <tr>
-                    <td colspan="8" class="loading">Loading...</td>
+                    <td colspan="10" class="loading">Loading...</td>
                 </tr>
             </tbody>
         </table>
@@ -324,6 +412,58 @@
             return 'normal';
         }
 
+        function renderAgentStats(agentStats) {
+            const tbody = document.getElementById('agentStatsBody');
+            if (!agentStats || Object.keys(agentStats).length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="loading">No agent data</td></tr>';
+                return;
+            }
+            
+            const agents = Object.entries(agentStats)
+                .map(([name, stats]) => {
+                    const hitRate = stats.total > 0 ? ((stats.hit / stats.total) * 100).toFixed(1) : 0;
+                    return { name, ...stats, hitRate: parseFloat(hitRate) };
+                })
+                .sort((a, b) => b.total - a.total); // Sort by total descending
+            
+            tbody.innerHTML = agents.map(agent => `
+                <tr>
+                    <td>${agent.name}</td>
+                    <td>${agent.total}</td>
+                    <td style="color: #34d399;">${agent.hit}</td>
+                    <td style="color: #fbbf24;">${agent.missed}</td>
+                    <td style="color: #60a5fa;">${agent.active}</td>
+                    <td style="font-weight: bold; color: ${agent.hitRate >= 80 ? '#34d399' : agent.hitRate >= 60 ? '#fbbf24' : '#f87171'}">${agent.hitRate}%</td>
+                </tr>
+            `).join('');
+        }
+        
+        function renderSLATypeStats(slaTypeStats) {
+            const tbody = document.getElementById('slaTypeStatsBody');
+            if (!slaTypeStats || Object.keys(slaTypeStats).length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="loading">No SLA type data</td></tr>';
+                return;
+            }
+            
+            const slaTypes = Object.entries(slaTypeStats)
+                .map(([name, stats]) => {
+                    const hitRate = stats.total > 0 ? ((stats.hit / stats.total) * 100).toFixed(1) : 0;
+                    return { name, ...stats, hitRate: parseFloat(hitRate) };
+                })
+                .sort((a, b) => b.total - a.total); // Sort by total descending
+            
+            tbody.innerHTML = slaTypes.map(sla => `
+                <tr>
+                    <td>${sla.name}</td>
+                    <td>${sla.total}</td>
+                    <td style="color: #34d399;">${sla.hit}</td>
+                    <td style="color: #fbbf24;">${sla.missed}</td>
+                    <td style="color: #60a5fa;">${sla.active}</td>
+                    <td style="font-weight: bold; color: ${sla.hitRate >= 80 ? '#34d399' : sla.hitRate >= 60 ? '#fbbf24' : '#f87171'}">${sla.hitRate}%</td>
+                </tr>
+            `).join('');
+        }
+
         async function loadStats() {
             try {
                 const response = await fetch('/api/sla/stats');
@@ -336,7 +476,18 @@
                     document.getElementById('statActive').textContent = stats.active || 0;
                     document.getElementById('statMissed').textContent = stats.missed || 0;
                     document.getElementById('statHit').textContent = stats.hit || 0;
+                    document.getElementById('statHitRate').textContent = stats.hit_rate ? `${stats.hit_rate}%` : '-';
+                    document.getElementById('statAvgResponse').textContent = stats.avg_response_time_minutes !== null ? `${stats.avg_response_time_minutes}m` : '-';
+                    document.getElementById('statUnwarranted').textContent = stats.unwarranted || 0;
                     document.getElementById('statTotal').textContent = stats.total_tracked || 0;
+                    
+                    // Render performance breakdowns
+                    if (stats.agent_stats) {
+                        renderAgentStats(stats.agent_stats);
+                    }
+                    if (stats.sla_type_stats) {
+                        renderSLATypeStats(stats.sla_type_stats);
+                    }
                 }
             } catch (err) {
                 console.error('Error loading stats:', err);
@@ -346,11 +497,17 @@
         async function loadData() {
             const status = document.getElementById('filterStatus').value;
             const slaName = document.getElementById('filterSlaName').value;
+            const unwarranted = document.getElementById('filterUnwarranted').value;
+            const assignee = document.getElementById('filterAssignee').value;
+            const ticketState = document.getElementById('filterTicketState').value;
             const sortBy = document.getElementById('sortBy').value;
             
             const params = new URLSearchParams();
             if (status) params.append('status', status);
             if (slaName) params.append('sla_name', slaName);
+            if (unwarranted) params.append('unwarranted', unwarranted);
+            if (assignee) params.append('assignee', assignee);
+            if (ticketState) params.append('ticket_state', ticketState);
             if (sortBy) params.append('sort', sortBy);
             
             try {
@@ -372,31 +529,59 @@
             const tbody = document.getElementById('ticketsTableBody');
             
             if (tickets.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="loading">No tickets found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="loading">No tickets found</td></tr>';
                 return;
             }
+            
+            // Populate assignee filter
+            const assignees = [...new Set(tickets.map(t => t.assignee_name).filter(Boolean))].sort();
+            const assigneeFilter = document.getElementById('filterAssignee');
+            const currentAssignee = assigneeFilter.value;
+            assigneeFilter.innerHTML = '<option value="">All</option>' + 
+                assignees.map(a => `<option value="${a}">${a}</option>`).join('');
+            if (currentAssignee) assigneeFilter.value = currentAssignee;
             
             tbody.innerHTML = tickets.map(ticket => {
                 const remaining = formatTime(ticket.remaining_seconds);
                 const countdownClass = getCountdownClass(ticket.remaining_seconds, ticket.is_overdue);
+                const ticketLink = `https://app.intercom.com/a/inbox/tickets/${ticket.ticket_id}`;
+                const assigneeName = ticket.assignee_name || 'Unassigned';
+                const unwarrantedBadge = ticket.has_unwarranted_tag ? '<span class="status-badge" style="background: #fbbf24; color: #78350f;">Unwarranted</span>' : '';
+                const subject = ticket.ticket_subject || 'No subject';
+                const timeSinceAssignment = ticket.time_since_assignment_minutes !== null 
+                    ? `${ticket.time_since_assignment_minutes}m` 
+                    : 'N/A';
+                const ticketState = ticket.ticket_state || 'unknown';
+                const progressBar = ticket.progress_percent !== null 
+                    ? `<div style="width: 100px; height: 8px; background: #334155; border-radius: 4px; overflow: hidden;">
+                         <div style="width: ${ticket.progress_percent}%; height: 100%; background: ${ticket.is_overdue ? '#ef4444' : (ticket.progress_percent > 80 ? '#f87171' : '#60a5fa')};"></div>
+                       </div>`
+                    : 'N/A';
                 
                 return `
                     <tr>
-                        <td class="ticket-id">${ticket.ticket_id}</td>
+                        <td class="ticket-id">
+                            <a href="${ticketLink}" target="_blank" style="color: #60a5fa; text-decoration: none;">${ticket.ticket_id}</a>
+                        </td>
+                        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${subject}">${subject}</td>
                         <td>${ticket.sla_name}</td>
                         <td>
                             <span class="status-badge status-${ticket.sla_status}">
                                 ${ticket.sla_status}
                             </span>
                             ${ticket.is_paused ? '<span class="status-badge status-paused">Paused</span>' : ''}
+                            ${unwarrantedBadge}
                         </td>
-                        <td>-</td>
-                        <td>${formatDate(ticket.assigned_at)}</td>
-                        <td>${formatDate(ticket.deadline)}</td>
+                        <td>${assigneeName}</td>
+                        <td>${timeSinceAssignment}</td>
+                        <td>${progressBar}</td>
                         <td>
                             <span class="countdown ${countdownClass}">
                                 ${remaining}
                             </span>
+                        </td>
+                        <td>
+                            <span class="status-badge ${ticketState === 'open' ? 'status-active' : ''}">${ticketState}</span>
                         </td>
                         <td>${ticket.alert_count || 0}</td>
                     </tr>

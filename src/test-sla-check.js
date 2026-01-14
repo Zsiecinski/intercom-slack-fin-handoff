@@ -84,8 +84,31 @@ async function testSLACheck() {
       }
     }
     
+    // Check for tags
+    console.log('\n4. Checking tags...');
+    const tags = ticket.tags || ticket.tag_list || [];
+    if (tags.length > 0) {
+      console.log(`   Tags found: ${tags.length}`);
+      tags.forEach(tag => {
+        const tagName = typeof tag === 'string' ? tag : (tag.name || tag.id || 'Unknown');
+        console.log(`   - ${tagName}`);
+      });
+      
+      // Check for "unwarranted sla" tag
+      const hasUnwarrantedTag = tags.some(tag => {
+        const tagName = typeof tag === 'string' ? tag : (tag.name || tag.id || '');
+        return tagName.toLowerCase().includes('unwarranted sla');
+      });
+      
+      if (hasUnwarrantedTag) {
+        console.log(`   ⚠️  Ticket has "unwarranted sla" tag - SLA tracking will be skipped`);
+      }
+    } else {
+      console.log('   No tags found');
+    }
+    
     // Try to get full ticket details (sometimes SLA is in nested data)
-    console.log('\n4. Full ticket structure:');
+    console.log('\n5. Full ticket structure:');
     console.log('   Keys in ticket object:', Object.keys(ticket).join(', '));
     
     // Check for nested SLA data
@@ -94,10 +117,10 @@ async function testSLACheck() {
     }
     
     // Now run the actual SLA check function
-    console.log('\n5. Running checkSLAStatus() function...');
+    console.log('\n6. Running checkSLAStatus() function...');
     const slaResult = await checkSLAStatus(ticket);
     
-    console.log('\n6. SLA Check Result:');
+    console.log('\n7. SLA Check Result:');
     console.log(`   Alerted: ${slaResult.alerted}`);
     console.log(`   Violation Type: ${slaResult.violationType || 'None'}`);
     console.log(`   Deadline: ${slaResult.deadline ? new Date(slaResult.deadline * 1000).toISOString() : 'None'}`);

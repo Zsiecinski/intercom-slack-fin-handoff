@@ -216,6 +216,41 @@ function calculateDeadline(assignedAt, slaDuration, config) {
 }
 
 /**
+ * Check if ticket has "unwarranted sla" tag
+ * @param {Object} ticket - Ticket object
+ * @returns {boolean} - True if ticket has the tag
+ */
+function hasUnwarrantedSLATag(ticket) {
+  // Check tags array (can be in different formats)
+  const tags = ticket.tags || ticket.tag_list || [];
+  
+  if (!Array.isArray(tags)) {
+    return false;
+  }
+  
+  // Check for "unwarranted sla" tag (case-insensitive)
+  return tags.some(tag => {
+    const tagName = typeof tag === 'string' ? tag : (tag.name || tag.id || '');
+    return tagName.toLowerCase().includes('unwarranted sla');
+  });
+}
+
+/**
+ * Get ticket tags as array of strings
+ * @param {Object} ticket - Ticket object
+ * @returns {Array<string>} - Array of tag names
+ */
+function getTicketTags(ticket) {
+  const tags = ticket.tags || ticket.tag_list || [];
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+  return tags.map(tag => {
+    return typeof tag === 'string' ? tag : (tag.name || tag.id || '');
+  });
+}
+
+/**
  * Check and process SLA status for a ticket
  * @param {Object} ticket - Ticket object
  * @returns {Promise<Object>} - { alerted: boolean, violationType: string|null, deadline: number|null }
@@ -278,6 +313,17 @@ export async function checkSLAStatus(ticket) {
     deadline = calculateDeadline(assignedAt, slaDuration, config);
   }
   
+  // Get ticket tags and assignee info
+  const tags = getTicketTags(ticket);
+  const hasUnwarrantedTag = hasUnwarrantedSLATag(ticket);
+  const assigneeName = ticket.admin_assignee?.name || null;
+  const assigneeEmail = ticket.admin_assignee?.email || null;
+  
+  // Get ticket metadata
+  const ticketSubject = ticket.subject || ticket.name || ticket.ticket_attributes?._default_title_ || null;
+  const ticketState = ticket.ticket_state?.internal_label || (ticket.open ? 'open' : 'closed') || null;
+  const ticketCreatedAt = ticket.created_at || null;
+  
   // Update cache with current state
   const now = Math.floor(Date.now() / 1000);
   const stateUpdate = {
@@ -288,7 +334,14 @@ export async function checkSLAStatus(ticket) {
     deadline: deadline,
     is_paused: isPaused,
     updated_at: now,
-    alert_history: previousState?.alert_history || []
+    alert_history: previousState?.alert_history || [],
+    tags: tags,
+    has_unwarranted_tag: hasUnwarrantedTag,
+    assignee_name: assigneeName,
+    assignee_email: assigneeEmail,
+    ticket_subject: ticketSubject,
+    ticket_state: ticketState,
+    ticket_created_at: ticketCreatedAt
   };
   
   // Check for violations
@@ -448,6 +501,20 @@ export function getAllSLATickets() {
     const isOverdue = state.deadline && now > state.deadline;
     const minutesRemaining = remaining ? Math.floor(remaining / 60) : null;
     
+    // Calculate time since assignment
+    const timeSinceAssignment = state.assigned_at ? (now - state.assigned_at) : null;
+    const timeSinceAssignmentMinutes = timeSinceAssignment ? Math.floor(timeSinceAssignment / 60) : null;
+    
+    // Calculate progress percentage (0-100)
+    let progressPercent = null;
+    if (state.deadline && state.assigned_at) {
+      const totalDuration = state.deadline - state.assigned_at;
+      const elapsed = now - state.assigned_at;
+      if (totalDuration > 0) {
+        progressPercent = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+      }
+    }
+    
     tickets.push({
       ticket_id: ticketId,
       sla_name: state.sla_name,
@@ -459,7 +526,17 @@ export function getAllSLATickets() {
       is_overdue: isOverdue,
       is_paused: state.is_paused,
       updated_at: state.updated_at,
-      alert_count: state.alert_history?.length || 0
+      alert_count: state.alert_history?.length || 0,
+      tags: state.tags || [],
+      has_unwarranted_tag: state.has_unwarranted_tag || false,
+      assignee_name: state.assignee_name || null,
+      assignee_email: state.assignee_email || null,
+      ticket_subject: state.ticket_subject || null,
+      ticket_state: state.ticket_state || null,
+      ticket_created_at: state.ticket_created_at || null,
+      time_since_assignment: timeSinceAssignment,
+      time_since_assignment_minutes: timeSinceAssignmentMinutes,
+      progress_percent: progressPercent
     });
   }
   
@@ -486,6 +563,7 @@ export function getSLAStats() {
   const hit = tickets.filter(t => t.sla_status === 'hit').length;
   const overdue = tickets.filter(t => t.is_overdue && t.sla_status === 'active').length;
   const paused = tickets.filter(t => t.is_paused).length;
+  const unwarranted = tickets.filter(t => t.has_unwarranted_tag).length;
   
   // Count tickets with < 5 minutes remaining
   const critical = tickets.filter(t => 
@@ -495,15 +573,59 @@ export function getSLAStats() {
     !t.is_overdue
   ).length;
   
+  // Calculate hit rate (excluding unwarranted)
+  const validTickets = tickets.filter(t => !t.has_unwarranted_tag);
+  const validHit = validTickets.filter(t => t.sla_status === 'hit').length;
+  const hitRate = validTickets.length > 0 ? ((validHit / validTickets.length) * 100).toFixed(1) : 0;
+  
+  // Calculate average response time (for hit tickets)
+  const hitTickets = tickets.filter(t => t.sla_status === 'hit' && t.time_since_assignment_minutes !== null);
+  const avgResponseTime = hitTickets.length > 0
+    ? Math.round(hitTickets.reduce((sum, t) => sum + t.time_since_assignment_minutes, 0) / hitTickets.length)
+    : null;
+  
+  // Agent performance breakdown
+  const agentStats = {};
+  tickets.forEach(ticket => {
+    if (!ticket.assignee_name) return;
+    const agent = ticket.assignee_name;
+    if (!agentStats[agent]) {
+      agentStats[agent] = { total: 0, hit: 0, missed: 0, active: 0, overdue: 0 };
+    }
+    agentStats[agent].total++;
+    if (ticket.sla_status === 'hit') agentStats[agent].hit++;
+    if (ticket.sla_status === 'missed') agentStats[agent].missed++;
+    if (ticket.sla_status === 'active') agentStats[agent].active++;
+    if (ticket.is_overdue) agentStats[agent].overdue++;
+  });
+  
+  // SLA type breakdown
+  const slaTypeStats = {};
+  tickets.forEach(ticket => {
+    const slaName = ticket.sla_name;
+    if (!slaTypeStats[slaName]) {
+      slaTypeStats[slaName] = { total: 0, hit: 0, missed: 0, active: 0 };
+    }
+    slaTypeStats[slaName].total++;
+    if (ticket.sla_status === 'hit') slaTypeStats[slaName].hit++;
+    if (ticket.sla_status === 'missed') slaTypeStats[slaName].missed++;
+    if (ticket.sla_status === 'active') slaTypeStats[slaName].active++;
+  });
+  
   return {
     enabled: !!SLA_CHANNEL,
-    channel: SLA_CHANNEL || null, // Keep as null (not string "null")
+    channel: SLA_CHANNEL || null,
     total_tracked: tickets.length,
     active,
     missed,
     hit,
     overdue,
     critical,
-    paused
+    paused,
+    unwarranted,
+    hit_rate: parseFloat(hitRate),
+    avg_response_time_minutes: avgResponseTime,
+    agent_stats: agentStats,
+    sla_type_stats: slaTypeStats
   };
 }

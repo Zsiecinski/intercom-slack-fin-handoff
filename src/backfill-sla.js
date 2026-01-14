@@ -6,7 +6,7 @@
  */
 
 import 'dotenv/config';
-import { searchTickets, getTicket } from './tickets.js';
+import { searchTickets, getTicket, getAdmin } from './tickets.js';
 import { getConversation } from './intercom.js';
 import { checkSLAStatus } from './sla-monitor-enhanced.js';
 import { initializeState } from './state.js';
@@ -75,6 +75,22 @@ async function backfillSLA() {
       try {
         // Fetch full ticket details
         const fullTicket = await getTicket(ticketId);
+        
+        // Fetch assignee info if available
+        if (fullTicket.admin_assignee_id) {
+          try {
+            const admin = await getAdmin(fullTicket.admin_assignee_id);
+            if (admin) {
+              fullTicket.admin_assignee = {
+                id: admin.id,
+                name: admin.name,
+                email: admin.email
+              };
+            }
+          } catch (adminErr) {
+            // Admin fetch failed - continue without assignee info
+          }
+        }
         
         // If ticket doesn't have SLA, try fetching the conversation
         if (!fullTicket.sla_applied && (!fullTicket.linked_objects?.data || fullTicket.linked_objects.data.length === 0)) {
