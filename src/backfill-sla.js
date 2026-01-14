@@ -81,6 +81,13 @@ async function backfillSLA() {
           continue;
         }
         
+        // Apply Intercom filters to match dashboard view:
+        // 1. Filter out unassigned tickets
+        if (!fullTicket.admin_assignee_id && !fullTicket.admin_assignee) {
+          filteredByAssignmentDate++;
+          continue;
+        }
+        
         // Fetch assignee info if available
         // Check both admin_assignee_id and admin_assignee (in case it's already populated)
         if (fullTicket.admin_assignee_id && !fullTicket.admin_assignee) {
@@ -169,6 +176,20 @@ async function backfillSLA() {
         // Merge conversation tags into ticket object for SLA check
         if (conversationTags.length > 0) {
           fullTicket.tags = conversationTags;
+        }
+        
+        // 2. Filter out tickets with excluded tags (gdpr_evey, spam_review, manual_review_reque...)
+        // Check tags after we've fetched them from conversations
+        const excludedTags = ['gdpr_evey', 'spam_review', 'manual_review_reque'];
+        const allTags = conversationTags.length > 0 ? conversationTags : (fullTicket.tags || []);
+        const hasExcludedTag = allTags.some(tag => {
+          const tagName = typeof tag === 'string' ? tag.toLowerCase() : (tag.name || tag.id || '').toLowerCase();
+          return excludedTags.some(excluded => tagName.includes(excluded.toLowerCase()));
+        });
+        
+        if (hasExcludedTag) {
+          filteredByAssignmentDate++;
+          continue;
         }
         
         // Track all assignments (not just SLA tickets)
