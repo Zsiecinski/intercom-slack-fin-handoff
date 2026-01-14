@@ -241,6 +241,22 @@ async function poll() {
             fullTicket.admin_assignee = ticket.admin_assignee;
           }
           
+          // Fetch assignee info if missing but admin_assignee_id exists
+          if (!fullTicket.admin_assignee && fullTicket.admin_assignee_id) {
+            try {
+              const admin = await getAdmin(fullTicket.admin_assignee_id);
+              if (admin) {
+                fullTicket.admin_assignee = {
+                  id: admin.id,
+                  name: admin.name,
+                  email: admin.email
+                };
+              }
+            } catch (adminErr) {
+              // Admin fetch failed - continue without assignee info
+            }
+          }
+          
           // If ticket doesn't have SLA, try fetching the conversation
           // (tickets created from conversations may have SLA on the conversation)
           if (!fullTicket.sla_applied && (!fullTicket.linked_objects?.data || fullTicket.linked_objects.data.length === 0)) {

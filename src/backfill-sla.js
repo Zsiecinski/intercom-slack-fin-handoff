@@ -77,7 +77,8 @@ async function backfillSLA() {
         const fullTicket = await getTicket(ticketId);
         
         // Fetch assignee info if available
-        if (fullTicket.admin_assignee_id) {
+        // Check both admin_assignee_id and admin_assignee (in case it's already populated)
+        if (fullTicket.admin_assignee_id && !fullTicket.admin_assignee) {
           try {
             const admin = await getAdmin(fullTicket.admin_assignee_id);
             if (admin) {
@@ -89,7 +90,13 @@ async function backfillSLA() {
             }
           } catch (adminErr) {
             // Admin fetch failed - continue without assignee info
+            console.log(`   ⚠️  Could not fetch admin for ticket ${ticketId}: ${adminErr.message}`);
           }
+        }
+        
+        // Also check if ticket has admin_assignee from search results
+        if (ticket.admin_assignee && !fullTicket.admin_assignee) {
+          fullTicket.admin_assignee = ticket.admin_assignee;
         }
         
         // If ticket doesn't have SLA, try fetching the conversation
