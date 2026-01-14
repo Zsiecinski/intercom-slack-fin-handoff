@@ -86,9 +86,16 @@ app.get('/api/sla/tickets', async (req, res) => {
     }
     
     // Filter by date range
-    // Default to assigned_at, but can filter by ticket_created_at if date_type=created
+    // Can filter by assigned_at, ticket_created_at, or deadline
     const dateType = req.query.date_type || 'assigned';
-    const dateField = dateType === 'created' ? 'ticket_created_at' : 'assigned_at';
+    let dateField;
+    if (dateType === 'created') {
+      dateField = 'ticket_created_at';
+    } else if (dateType === 'deadline') {
+      dateField = 'deadline';
+    } else {
+      dateField = 'assigned_at';
+    }
     
     if (req.query.date_from) {
       const dateFrom = new Date(req.query.date_from).getTime() / 1000; // Convert to Unix timestamp

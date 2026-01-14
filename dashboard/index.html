@@ -327,9 +327,10 @@
         </div>
         <div class="control-group">
             <label>Filter By:</label>
-            <select id="filterDateType" onchange="loadData()" title="Filter by assignment date or ticket creation date">
+            <select id="filterDateType" onchange="loadData()" title="Filter by assignment date, ticket creation date, or SLA deadline date">
                 <option value="assigned">Assignment Date</option>
                 <option value="created">Ticket Created Date</option>
+                <option value="deadline">SLA Deadline Date</option>
             </select>
         </div>
         <div class="control-group" id="customDateGroup" style="display: none;">
