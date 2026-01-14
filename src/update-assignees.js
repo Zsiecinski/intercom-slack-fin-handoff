@@ -1,6 +1,6 @@
 /**
- * Update existing SLA state with assignee information
- * Reads sla-state.json and fetches assignee info for tickets that don't have it
+ * Update existing SLA state with assignee information and tags
+ * Reads sla-state.json and fetches missing info for tickets
  * Usage: node src/update-assignees.js
  */
 
@@ -16,6 +16,27 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SLA_STATE_FILE = path.join(__dirname, '..', 'sla-state.json');
 
+/**
+ * Get ticket tags as array of strings
+ */
+function getTicketTags(ticket) {
+  const tags = ticket.tags || ticket.tag_list || [];
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+  return tags.map(tag => {
+    return typeof tag === 'string' ? tag : (tag.name || tag.id || '');
+  });
+}
+
+/**
+ * Check if ticket has "unwarranted sla" tag
+ */
+function hasUnwarrantedSLATag(ticket) {
+  const tags = getTicketTags(ticket);
+  return tags.some(tag => tag.toLowerCase().includes('unwarranted sla'));
+}
+
 async function updateAssignees() {
   try {
     // Reload current state
@@ -25,37 +46,66 @@ async function updateAssignees() {
     const stateData = await fs.readFile(SLA_STATE_FILE, 'utf-8');
     const state = JSON.parse(stateData);
     
-    console.log(`\n🔄 Updating assignee information for ${Object.keys(state).length} tickets...\n`);
+    console.log(`\n🔄 Updating ticket information for ${Object.keys(state).length} tickets...\n`);
     
-    let updated = 0;
+    let assigneesUpdated = 0;
+    let tagsUpdated = 0;
     let skipped = 0;
     let errors = 0;
     
     for (const [ticketId, ticketState] of Object.entries(state)) {
-      // Skip if already has assignee info
-      if (ticketState.assignee_name) {
-        skipped++;
-        continue;
-      }
+      let needsUpdate = false;
       
       try {
-        // Fetch ticket to get admin_assignee_id
+        // Fetch ticket to get current info
         const ticket = await getTicket(ticketId);
         
-        if (ticket.admin_assignee_id) {
-          // Fetch admin details
+        // Update assignee info if missing
+        if (!ticketState.assignee_name && ticket.admin_assignee_id) {
           const admin = await getAdmin(ticket.admin_assignee_id);
           if (admin) {
             ticketState.assignee_name = admin.name;
             ticketState.assignee_email = admin.email;
-            updated++;
-            console.log(`✅ Updated ticket ${ticketId}: ${admin.name}`);
-          } else {
-            console.log(`⚠️  No admin found for ticket ${ticketId}`);
-            skipped++;
+            assigneesUpdated++;
+            needsUpdate = true;
+            console.log(`✅ Ticket ${ticketId}: Added assignee ${admin.name}`);
           }
-        } else {
-          console.log(`⚠️  Ticket ${ticketId} has no admin_assignee_id`);
+        }
+        
+        // Update tags if missing
+        if (!ticketState.tags || ticketState.tags.length === 0) {
+          const tags = getTicketTags(ticket);
+          if (tags.length > 0) {
+            ticketState.tags = tags;
+            ticketState.has_unwarranted_tag = hasUnwarrantedSLATag(ticket);
+            tagsUpdated++;
+            needsUpdate = true;
+            if (ticketState.has_unwarranted_tag) {
+              console.log(`🏷️  Ticket ${ticketId}: Found "unwarranted sla" tag`);
+            } else {
+              console.log(`🏷️  Ticket ${ticketId}: Found ${tags.length} tag(s)`);
+            }
+          }
+        }
+        
+        // Update ticket metadata if missing
+        if (!ticketState.ticket_subject) {
+          const subject = ticket.subject || ticket.name || ticket.ticket_attributes?._default_title_ || null;
+          if (subject) {
+            ticketState.ticket_subject = subject;
+            needsUpdate = true;
+          }
+        }
+        
+        if (!ticketState.ticket_state) {
+          const ticketStateValue = ticket.ticket_state?.internal_label || (ticket.open ? 'open' : 'closed') || null;
+          if (ticketStateValue) {
+            ticketState.ticket_state = ticketStateValue;
+            needsUpdate = true;
+          }
+        }
+        
+        if (!needsUpdate) {
           skipped++;
         }
         
@@ -71,9 +121,13 @@ async function updateAssignees() {
     // Save updated state
     await fs.writeFile(SLA_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
     
+    const unwarrantedCount = Object.values(state).filter(t => t.has_unwarranted_tag).length;
+    
     console.log(`\n📊 Summary:`);
-    console.log(`   Updated: ${updated}`);
-    console.log(`   Skipped: ${skipped} (already had assignee info)`);
+    console.log(`   Assignees updated: ${assigneesUpdated}`);
+    console.log(`   Tags updated: ${tagsUpdated}`);
+    console.log(`   Unwarranted tickets found: ${unwarrantedCount}`);
+    console.log(`   Skipped: ${skipped} (already had info)`);
     console.log(`   Errors: ${errors}`);
     console.log(`\n✅ Done! sla-state.json has been updated.`);
     
