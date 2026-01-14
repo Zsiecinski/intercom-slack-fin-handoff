@@ -310,15 +310,28 @@
             </select>
         </div>
         <div class="control-group">
+            <label>Date Range:</label>
+            <select id="filterDatePreset" onchange="applyDatePreset()">
+                <option value="">All Time</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="past_week">Past Week</option>
+                <option value="month_to_date">Month to Date</option>
+                <option value="past_4_weeks">Past 4 Weeks</option>
+                <option value="past_12_weeks">Past 12 Weeks</option>
+                <option value="year_to_date">Year to Date</option>
+                <option value="past_6_months">Past 6 Months</option>
+                <option value="past_12_months">Past 12 Months</option>
+                <option value="custom">Custom...</option>
+            </select>
+        </div>
+        <div class="control-group" id="customDateGroup" style="display: none;">
             <label>Date From:</label>
             <input type="date" id="filterDateFrom" onchange="loadData()">
         </div>
-        <div class="control-group">
+        <div class="control-group" id="customDateGroup2" style="display: none;">
             <label>Date To:</label>
             <input type="date" id="filterDateTo" onchange="loadData()">
-        </div>
-        <div class="control-group">
-            <button onclick="clearDateFilter()" style="padding: 8px 16px; background: #475569; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear Dates</button>
         </div>
     </div>
 
@@ -612,9 +625,111 @@
             }).join('');
         }
 
+        function applyDatePreset() {
+            const preset = document.getElementById('filterDatePreset').value;
+            const customGroup = document.getElementById('customDateGroup');
+            const customGroup2 = document.getElementById('customDateGroup2');
+            const dateFromInput = document.getElementById('filterDateFrom');
+            const dateToInput = document.getElementById('filterDateTo');
+            
+            // Show/hide custom date inputs
+            if (preset === 'custom') {
+                customGroup.style.display = 'block';
+                customGroup2.style.display = 'block';
+                return; // Don't auto-apply, let user select dates
+            } else {
+                customGroup.style.display = 'none';
+                customGroup2.style.display = 'none';
+                dateFromInput.value = '';
+                dateToInput.value = '';
+            }
+            
+            if (!preset) {
+                // All Time - clear dates
+                loadData();
+                return;
+            }
+            
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            let fromDate, toDate;
+            
+            switch(preset) {
+                case 'today':
+                    fromDate = new Date(today);
+                    toDate = new Date(today);
+                    toDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'yesterday':
+                    fromDate = new Date(today);
+                    fromDate.setDate(fromDate.getDate() - 1);
+                    toDate = new Date(fromDate);
+                    toDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'past_week':
+                    fromDate = new Date(today);
+                    fromDate.setDate(fromDate.getDate() - 7);
+                    toDate = new Date(today);
+                    toDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'month_to_date':
+                    fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                    toDate = new Date(today);
+                    toDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'past_4_weeks':
+                    fromDate = new Date(today);
+                    fromDate.setDate(fromDate.getDate() - 28);
+                    toDate = new Date(today);
+                    toDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'past_12_weeks':
+                    fromDate = new Date(today);
+                    fromDate.setDate(fromDate.getDate() - 84);
+                    toDate = new Date(today);
+                    toDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'year_to_date':
+                    fromDate = new Date(now.getFullYear(), 0, 1);
+                    toDate = new Date(today);
+                    toDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'past_6_months':
+                    fromDate = new Date(today);
+                    fromDate.setMonth(fromDate.getMonth() - 6);
+                    toDate = new Date(today);
+                    toDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'past_12_months':
+                    fromDate = new Date(today);
+                    fromDate.setMonth(fromDate.getMonth() - 12);
+                    toDate = new Date(today);
+                    toDate.setHours(23, 59, 59, 999);
+                    break;
+                default:
+                    return;
+            }
+            
+            // Format dates as YYYY-MM-DD
+            const formatDate = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+            
+            dateFromInput.value = formatDate(fromDate);
+            dateToInput.value = formatDate(toDate);
+            
+            loadData();
+        }
+        
         function clearDateFilter() {
+            document.getElementById('filterDatePreset').value = '';
             document.getElementById('filterDateFrom').value = '';
             document.getElementById('filterDateTo').value = '';
+            document.getElementById('customDateGroup').style.display = 'none';
+            document.getElementById('customDateGroup2').style.display = 'none';
             loadData();
         }
         
