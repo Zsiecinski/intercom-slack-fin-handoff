@@ -241,15 +241,18 @@ async function poll() {
     
     for (const ticket of tickets) {
       // Process assignment notification
+      // IMPORTANT: This checks isAssignmentNotified and marks as notified if sent
       const sent = await processTicket(ticket, lastCheckTime);
       if (sent) {
         notificationsSent++;
       }
 
       // Track all assignments (not just SLA tickets)
+      // Use the ticket object that was already processed (may have been updated with statistics)
       if (ticket.id && ticket.admin_assignee_id) {
         try {
           // Track assignment - this records ALL tickets, not just SLA ones
+          // Use the ticket object that was processed (may have statistics merged in)
           await trackAssignment(ticket);
         } catch (trackErr) {
           // Tracking failed - continue
@@ -260,6 +263,8 @@ async function poll() {
       // Check SLA status with enhanced monitoring
       // Note: SLA info might be in linked conversation, so we fetch full ticket details
       // to get complete information including linked_objects and statistics
+      // IMPORTANT: We already checked isAssignmentNotified in processTicket, so even if
+      // this ticket appears again due to updates, it won't send duplicate notifications
       if (ticket.id) {
         try {
           const fullTicket = await getTicket(ticket.id);
