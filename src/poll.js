@@ -247,19 +247,6 @@ async function poll() {
         notificationsSent++;
       }
 
-      // Track all assignments (not just SLA tickets)
-      // Use the ticket object that was already processed (may have been updated with statistics)
-      if (ticket.id && ticket.admin_assignee_id) {
-        try {
-          // Track assignment - this records ALL tickets, not just SLA ones
-          // Use the ticket object that was processed (may have statistics merged in)
-          await trackAssignment(ticket);
-        } catch (trackErr) {
-          // Tracking failed - continue
-          console.error(`Failed to track assignment for ticket ${ticket.id}:`, trackErr.message);
-        }
-      }
-
       // Check SLA status with enhanced monitoring
       // Note: SLA info might be in linked conversation, so we fetch full ticket details
       // to get complete information including linked_objects and statistics
@@ -289,9 +276,15 @@ async function poll() {
             }
           }
           
-          // Update assignment tracking with full ticket info
+          // Track all assignments (not just SLA tickets) with full ticket info
+          // This ensures we have complete information including statistics
           if (fullTicket.admin_assignee) {
-            await trackAssignment(fullTicket);
+            try {
+              await trackAssignment(fullTicket);
+            } catch (trackErr) {
+              // Tracking failed - continue
+              console.error(`Failed to track assignment for ticket ${fullTicket.id}:`, trackErr.message);
+            }
           }
           
           // Fetch tags from linked conversations (tags are on conversations, not tickets)
