@@ -85,12 +85,17 @@ app.get('/api/sla/tickets', async (req, res) => {
       });
     }
     
-    // Filter by date range (based on assigned_at timestamp)
+    // Filter by date range
+    // Default to assigned_at, but can filter by ticket_created_at if date_type=created
+    const dateType = req.query.date_type || 'assigned';
+    const dateField = dateType === 'created' ? 'ticket_created_at' : 'assigned_at';
+    
     if (req.query.date_from) {
       const dateFrom = new Date(req.query.date_from).getTime() / 1000; // Convert to Unix timestamp
       tickets = tickets.filter(t => {
-        if (!t.assigned_at) return false;
-        return t.assigned_at >= dateFrom;
+        const dateValue = t[dateField];
+        if (!dateValue) return false;
+        return dateValue >= dateFrom;
       });
     }
     
@@ -99,8 +104,9 @@ app.get('/api/sla/tickets', async (req, res) => {
       // Add 24 hours to include the entire end date
       const dateToEnd = dateTo + (24 * 60 * 60);
       tickets = tickets.filter(t => {
-        if (!t.assigned_at) return false;
-        return t.assigned_at <= dateToEnd;
+        const dateValue = t[dateField];
+        if (!dateValue) return false;
+        return dateValue <= dateToEnd;
       });
     }
     

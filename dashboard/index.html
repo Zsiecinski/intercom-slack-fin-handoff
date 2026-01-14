@@ -325,6 +325,13 @@
                 <option value="custom">Custom...</option>
             </select>
         </div>
+        <div class="control-group">
+            <label>Filter By:</label>
+            <select id="filterDateType" onchange="loadData()" title="Filter by assignment date or ticket creation date">
+                <option value="assigned">Assignment Date</option>
+                <option value="created">Ticket Created Date</option>
+            </select>
+        </div>
         <div class="control-group" id="customDateGroup" style="display: none;">
             <label>Date From:</label>
             <input type="date" id="filterDateFrom" onchange="loadData()">
@@ -499,13 +506,15 @@
         async function loadStats() {
             try {
                 // Get date filters from the form
-                const dateFrom = document.getElementById('filterDateFrom').value;
-                const dateTo = document.getElementById('filterDateTo').value;
-                
-                // Build query params with date filters
-                const params = new URLSearchParams();
-                if (dateFrom) params.append('date_from', dateFrom);
-                if (dateTo) params.append('date_to', dateTo);
+            const dateFrom = document.getElementById('filterDateFrom').value;
+            const dateTo = document.getElementById('filterDateTo').value;
+            const dateType = document.getElementById('filterDateType').value;
+            
+            // Build query params with date filters
+            const params = new URLSearchParams();
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo) params.append('date_to', dateTo);
+            if (dateType) params.append('date_type', dateType);
                 
                 const url = params.toString() ? `/api/sla/stats?${params}` : '/api/sla/stats';
                 const response = await fetch(url);
