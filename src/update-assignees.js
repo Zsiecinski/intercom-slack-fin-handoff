@@ -74,10 +74,33 @@ async function updateAssignees() {
         
         // Update tags if missing
         if (!ticketState.tags || ticketState.tags.length === 0) {
-          const tags = getTicketTags(ticket);
+          let tags = getTicketTags(ticket);
+          
+          // If no tags on ticket, check linked conversation
+          if (tags.length === 0 && ticket.linked_objects?.data) {
+            for (const linked of ticket.linked_objects.data) {
+              if (linked.type === 'conversation') {
+                try {
+                  const conversation = await getConversation(linked.id);
+                  const convTags = getTicketTags(conversation); // Reuse same function
+                  if (convTags.length > 0) {
+                    tags = convTags;
+                    console.log(`   Found ${tags.length} tag(s) on linked conversation ${linked.id}`);
+                    break;
+                  }
+                } catch (convErr) {
+                  // Conversation fetch failed - continue
+                }
+              }
+            }
+          }
+          
           if (tags.length > 0) {
             ticketState.tags = tags;
-            ticketState.has_unwarranted_tag = hasUnwarrantedSLATag(ticket);
+            ticketState.has_unwarranted_tag = tags.some(tag => {
+              const tagName = typeof tag === 'string' ? tag : (tag.name || tag.id || '');
+              return tagName.toLowerCase().includes('unwarranted sla');
+            });
             tagsUpdated++;
             needsUpdate = true;
             if (ticketState.has_unwarranted_tag) {
