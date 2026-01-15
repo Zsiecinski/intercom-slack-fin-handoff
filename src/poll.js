@@ -71,9 +71,12 @@ async function processTicket(ticket, lastCheckTime) {
     try {
       const fullTicket = await getTicket(ticketId);
       assignmentTimestamp = getAssignmentTimestamp(fullTicket);
-      // Merge statistics into ticket object for later use
+      // Merge statistics and snoozed_until into ticket object for later use
       if (fullTicket.statistics) {
         ticket.statistics = fullTicket.statistics;
+      }
+      if (fullTicket.snoozed_until) {
+        ticket.snoozed_until = fullTicket.snoozed_until;
       }
     } catch (err) {
       console.error(`Failed to fetch full ticket ${ticketId} for assignment timestamp:`, err.message);
