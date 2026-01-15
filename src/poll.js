@@ -93,6 +93,22 @@ async function processTicket(ticket, lastCheckTime) {
     return false;
   }
 
+  // Check if ticket is snoozed - skip notifications for snoozed tickets
+  if (ticket.snoozed_until) {
+    const snoozedUntil = ticket.snoozed_until;
+    const now = Math.floor(Date.now() / 1000);
+    if (snoozedUntil > now) {
+      console.log(`Skipping notification for ticket ${ticketId} - ticket is snoozed until ${new Date(snoozedUntil * 1000).toISOString()}`);
+      // Mark as notified even if snoozed to prevent duplicate processing
+      try {
+        await markAssignmentNotified(ticketId, adminAssigneeId, assignmentTimestamp);
+      } catch (stateErr) {
+        console.error(`⚠️  Failed to save state for snoozed ticket ${ticketId}:`, stateErr.message);
+      }
+      return false;
+    }
+  }
+
   // Check if ticket was created or updated after last check
   // Note: We search by created_at, but also check updated_at to catch reassignments
   const createdAt = ticket.created_at || 0;
