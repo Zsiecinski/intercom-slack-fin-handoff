@@ -106,18 +106,37 @@ export async function isAssignmentNotified(ticketId, assigneeId, assignmentTimes
     return true;
   }
   
-  // Additional check for snooze expiration: If we're using updated_at as assignment timestamp
-  // (meaning statistics aren't available), be more conservative to prevent notifications
-  // when tickets wake up from snooze. Only allow if assignment timestamp is significantly different
-  // (more than 1 hour), indicating a real reassignment rather than just a snooze expiration.
+  // CRITICAL: If we're using updated_at as assignment timestamp (statistics not available),
+  // be VERY conservative. updated_at changes for many reasons (comments, status changes, etc.),
+  // not just assignments. If we've already notified for this ticket+assignee, only allow
+  // a new notification if it's been more than 24 hours since the last notification,
+  // indicating it might be a real reassignment.
   if (options.isUsingUpdatedAtAsAssignment && notifiedAssignment.assigneeId === assigneeId) {
-    // If we previously notified for this ticket+assignee, and we're using updated_at,
-    // only send notification if the timestamp is significantly different (more than 1 hour)
-    // This prevents notifications when snooze expires (which updates updated_at)
-    if (timeDiff < 3600) { // Less than 1 hour difference
-      console.log(`Skipping notification for ticket ${ticketId} - likely woke up from snooze (timestamp diff: ${timeDiff}s, using updated_at)`);
+    // If it's been less than 24 hours since we last notified, skip it
+    // This prevents duplicate notifications when tickets are updated for other reasons
+    if (notifiedAgo < 86400) { // Less than 24 hours (86400 seconds)
+      console.log(`Skipping notification for ticket ${ticketId} - already notified ${Math.floor(notifiedAgo / 60)} minutes ago (using updated_at, likely ticket update not reassignment)`);
       return true;
     }
+    // If it's been more than 24 hours, allow it (might be a real reassignment)
+    console.log(`Allowing notification for ticket ${ticketId} - last notified ${Math.floor(notifiedAgo / 3600)} hours ago (using updated_at, possible reassignment)`);
+    return false;
+  }
+  
+  // If we have statistics (first_assignment_at or last_assignment_at), we can be more precise.
+  // If the assignment timestamp from statistics hasn't changed significantly, it's the same assignment.
+  // Only allow if the assignment timestamp is significantly different (more than 1 hour),
+  // indicating a real reassignment rather than just a ticket update.
+  if (!options.isUsingUpdatedAtAsAssignment && notifiedAssignment.assigneeId === assigneeId) {
+    // If the assignment timestamp difference is less than 1 hour, it's likely the same assignment
+    // being reprocessed due to ticket updates (comments, status changes, etc.)
+    if (timeDiff < 3600) { // Less than 1 hour difference
+      console.log(`Skipping notification for ticket ${ticketId} - assignment timestamp diff: ${timeDiff}s (likely same assignment, ticket was updated)`);
+      return true;
+    }
+    // If the assignment timestamp difference is more than 1 hour, it might be a real reassignment
+    console.log(`Allowing notification for ticket ${ticketId} - assignment timestamp diff: ${timeDiff}s (possible reassignment)`);
+    return false;
   }
   
   // Different timestamp and assignee is the same - could be a reassignment or ticket update
