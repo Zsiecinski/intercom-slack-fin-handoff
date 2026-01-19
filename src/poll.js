@@ -124,7 +124,13 @@ async function processTicket(ticket, lastCheckTime) {
   }
 
   // Check if this assignment has already been notified (persistent check)
-  const alreadyNotified = await isAssignmentNotified(ticketId, adminAssigneeId, assignmentTimestamp);
+  // IMPORTANT: Check this BEFORE checking snooze expiration to prevent notifications
+  // when tickets wake up from snooze (updated_at changes but assignment hasn't)
+  const alreadyNotified = await isAssignmentNotified(ticketId, adminAssigneeId, assignmentTimestamp, {
+    isUsingUpdatedAtAsAssignment: !ticket.statistics?.first_assignment_at && 
+                                   !ticket.statistics?.last_assignment_at &&
+                                   assignmentTimestamp === ticket.updated_at
+  });
   if (alreadyNotified) {
     console.log(`Skipping duplicate assignment: ${ticketId}:${adminAssigneeId}:${assignmentTimestamp} (already notified)`);
     return false;

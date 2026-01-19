@@ -70,9 +70,11 @@ export async function updateLastCheckTime(timestamp) {
  * @param {string} ticketId - Ticket ID
  * @param {string} assigneeId - Assignee ID
  * @param {number} assignmentTimestamp - Assignment timestamp in seconds
+ * @param {Object} options - Additional options
+ * @param {boolean} options.isUsingUpdatedAtAsAssignment - True if using updated_at as assignment timestamp (less reliable)
  * @returns {Promise<boolean>} - True if already notified
  */
-export async function isAssignmentNotified(ticketId, assigneeId, assignmentTimestamp) {
+export async function isAssignmentNotified(ticketId, assigneeId, assignmentTimestamp, options = {}) {
   const state = await getState();
   const assignmentKey = `${ticketId}:${assigneeId}`;
   const notifiedAssignment = state.notifiedAssignments?.[assignmentKey];
@@ -102,6 +104,20 @@ export async function isAssignmentNotified(ticketId, assigneeId, assignmentTimes
   if (notifiedAgo < 600 && notifiedAssignment.assigneeId === assigneeId) {
     console.log(`Skipping duplicate assignment: ${ticketId}:${assigneeId} (notified ${notifiedAgo}s ago)`);
     return true;
+  }
+  
+  // Additional check for snooze expiration: If we're using updated_at as assignment timestamp
+  // (meaning statistics aren't available), be more conservative to prevent notifications
+  // when tickets wake up from snooze. Only allow if assignment timestamp is significantly different
+  // (more than 1 hour), indicating a real reassignment rather than just a snooze expiration.
+  if (options.isUsingUpdatedAtAsAssignment && notifiedAssignment.assigneeId === assigneeId) {
+    // If we previously notified for this ticket+assignee, and we're using updated_at,
+    // only send notification if the timestamp is significantly different (more than 1 hour)
+    // This prevents notifications when snooze expires (which updates updated_at)
+    if (timeDiff < 3600) { // Less than 1 hour difference
+      console.log(`Skipping notification for ticket ${ticketId} - likely woke up from snooze (timestamp diff: ${timeDiff}s, using updated_at)`);
+      return true;
+    }
   }
   
   // Different timestamp and assignee is the same - could be a reassignment or ticket update
